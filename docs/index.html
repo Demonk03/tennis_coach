@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d5c3d">
+  <meta name="description" content="Личный AI-тренер до и во время теннисного матча">
+  <title>AI Tennis Coach</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-mark" aria-hidden="true">●</div>
+    <div>
+      <p class="eyebrow">COURTSIDE</p>
+      <h1>AI Tennis Coach</h1>
+    </div>
+    <span id="connection-dot" class="connection-dot" title="Статус подключения"></span>
+  </header>
+
+  <main>
+    <section id="screen-prep" class="screen" aria-labelledby="prep-title">
+      <div class="hero">
+        <p class="eyebrow">ПЕРЕД ВЫХОДОМ НА КОРТ</p>
+        <h2 id="prep-title">Соберём план на матч</h2>
+        <p>Контекст, состояние и последние показатели восстановления — в одном коротком брифе.</p>
+      </div>
+
+      <article id="oura-card" class="oura-card" aria-live="polite">
+        <div>
+          <p class="eyebrow">OURA-V2</p>
+          <h3 id="oura-title">Проверяю данные…</h3>
+          <p id="oura-meta" class="muted"></p>
+        </div>
+        <label class="switch-label">
+          <input id="use-oura" type="checkbox" checked>
+          <span>Учесть</span>
+        </label>
+        <div id="oura-metrics" class="metrics"></div>
+      </article>
+
+      <form id="prep-form" class="stack-form">
+        <fieldset>
+          <legend>Матч</legend>
+          <div class="field-row">
+            <label>Тип
+              <select name="match_type" required>
+                <option value="singles">Одиночка</option>
+                <option value="doubles">Пара</option>
+              </select>
+            </label>
+            <label>Покрытие
+              <select name="surface" required>
+                <option value="hard">Хард</option>
+                <option value="clay">Грунт</option>
+                <option value="grass">Трава</option>
+                <option value="carpet">Ковёр</option>
+                <option value="other">Другое</option>
+              </select>
+            </label>
+          </div>
+          <label>Соперник / имя
+            <input name="opponent_name" maxlength="100" placeholder="Например, Андрей">
+          </label>
+          <label>Уровень соперника
+            <input name="opponent_level" maxlength="100" required placeholder="Равный, сильнее, клубный 4.0…">
+          </label>
+          <label>Стиль соперника
+            <input name="opponent_style" maxlength="200" placeholder="Контратакует, высокий темп, слабее слева…">
+          </label>
+          <div class="field-row">
+            <label>Формат
+              <select name="session_format" required>
+                <option value="friendly">Товарищеский</option>
+                <option value="tournament">Турнир</option>
+                <option value="1h_session">1 час</option>
+                <option value="2h_session">2 часа</option>
+              </select>
+            </label>
+            <label>Погода
+              <input name="weather" maxlength="200" placeholder="Жарко, ветер…">
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Состояние</legend>
+          <label>Энергия <output id="energy-output">3 / 5</output>
+            <input id="prep-energy" name="energy_level" type="range" min="1" max="5" value="3">
+          </label>
+          <label>Когда и что ел
+            <input name="last_meal" maxlength="200" placeholder="Обед 2 часа назад, легко">
+          </label>
+          <label>Тело
+            <textarea name="physical_state" maxlength="300" required placeholder="Как спина, колени, ноги, дыхание?"></textarea>
+          </label>
+          <label>Настрой
+            <textarea name="mindset" maxlength="300" required placeholder="Спокоен, зажат, мотивирован…"></textarea>
+          </label>
+        </fieldset>
+
+        <button id="prep-submit" class="primary-button" type="submit">Получить бриф</button>
+      </form>
+
+      <article id="prep-result" class="advice-card" hidden>
+        <p class="eyebrow">ПЛАН НА МАТЧ</p>
+        <p id="prep-brief"></p>
+        <button id="start-match" class="primary-button" type="button">Начать матч</button>
+      </article>
+    </section>
+
+    <section id="screen-match" class="screen" hidden aria-labelledby="match-title">
+      <div id="no-active-match" class="empty-state">
+        <p class="eyebrow">МАТЧ</p>
+        <h2 id="match-title">Активного матча нет</h2>
+        <p>Сначала получите подготовительный бриф.</p>
+        <button class="secondary-button" data-go="prep">К подготовке</button>
+      </div>
+
+      <div id="active-match" hidden>
+        <div class="scoreboard">
+          <div>
+            <p class="eyebrow">СЕЙЧАС НА КОРТЕ</p>
+            <h2 id="match-opponent">Матч</h2>
+          </div>
+          <p id="score-display" class="score-display">0–0</p>
+        </div>
+
+        <form id="score-form" class="score-form">
+          <label>Сеты / геймы
+            <input id="score-sets" placeholder="6-4 2-3" maxlength="80">
+          </label>
+          <label>Очки
+            <select id="score-game">
+              <option>0-0</option><option>15-0</option><option>0-15</option>
+              <option>15-15</option><option>30-15</option><option>15-30</option>
+              <option>30-30</option><option>40-30</option><option>30-40</option>
+              <option>40-40</option><option>AD-40</option><option>40-AD</option>
+            </select>
+          </label>
+          <label>Подаёт
+            <select id="score-serving">
+              <option value="unknown">Неважно</option>
+              <option value="self">Я</option>
+              <option value="opponent">Соперник</option>
+            </select>
+          </label>
+          <button class="quiet-button" type="submit">Сохранить счёт</button>
+        </form>
+
+        <div class="event-actions">
+          <button id="changeover-button" class="primary-button" type="button">Переход</button>
+          <button id="new-set-button" class="secondary-button" type="button">Новый сет</button>
+        </div>
+
+        <div id="card-flow" class="card-flow" hidden></div>
+
+        <article id="advice-result" class="advice-card" hidden>
+          <p class="eyebrow">СЛЕДУЮЩИЙ ФОКУС</p>
+          <p id="advice-text"></p>
+        </article>
+
+        <details class="match-controls">
+          <summary>Завершение матча</summary>
+          <form id="finish-form">
+            <label>Итоговый счёт
+              <input name="final_score" required maxlength="120" placeholder="6-4 3-6 10-7">
+            </label>
+            <button class="primary-button" type="submit">Завершить матч</button>
+          </form>
+          <button id="cancel-match" class="danger-button" type="button">Отменить этот матч</button>
+        </details>
+      </div>
+    </section>
+
+    <section id="screen-history" class="screen" hidden aria-labelledby="history-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">АРХИВ</p>
+          <h2 id="history-title">История матчей</h2>
+        </div>
+        <button id="refresh-history" class="icon-button" aria-label="Обновить историю">↻</button>
+      </div>
+      <div id="matches-list" class="match-list"></div>
+      <article id="match-detail" class="history-detail" hidden></article>
+    </section>
+
+    <section id="screen-settings" class="screen" hidden aria-labelledby="settings-title">
+      <div class="hero compact">
+        <p class="eyebrow">ЭТО УСТРОЙСТВО</p>
+        <h2 id="settings-title">Настройки подключения</h2>
+        <p>Ключ хранится только в браузере этого устройства.</p>
+      </div>
+      <form id="settings-form" class="stack-form">
+        <label>Адрес API
+          <input id="settings-api-url" type="url" required placeholder="https://tennis-coach.onrender.com">
+        </label>
+        <label>Личный API-ключ
+          <input id="settings-api-key" type="password" required autocomplete="current-password">
+        </label>
+        <button class="primary-button" type="submit">Сохранить и проверить</button>
+      </form>
+      <p id="settings-status" class="status-message" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Основная навигация">
+    <button data-screen="prep" class="active"><span>◎</span>Подготовка</button>
+    <button data-screen="match"><span>◫</span>Матч</button>
+    <button data-screen="history"><span>≡</span>История</button>
+    <button data-screen="settings"><span>⚙</span>Настройки</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

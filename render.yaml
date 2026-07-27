@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: tennis-coach-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.5
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: OURA_USER_ID
+        sync: false
+      - key: OURA_MAX_AGE_DAYS
+        value: 2
+      - key: APP_TIMEZONE
+        value: Europe/Moscow
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: API_KEY
+        sync: false
+      - key: DASHBOARD_ORIGIN
+        sync: false
