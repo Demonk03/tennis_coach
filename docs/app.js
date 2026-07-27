@@ -514,7 +514,18 @@ function bindEvents() {
   $("#settings-form").addEventListener("submit", saveSettings);
 }
 
+function applyLinkCredentials() {
+  const params = new URLSearchParams(window.location.search);
+  const key = params.get("key");
+  if (!key) return;
+  localStorage.setItem("tennisCoachApiKey", key.trim());
+  params.delete("key");
+  const cleanUrl = window.location.pathname + (params.toString() ? `?${params}` : "") + window.location.hash;
+  window.history.replaceState({}, "", cleanUrl);
+}
+
 async function boot() {
+  applyLinkCredentials();
   bindEvents();
   $("#settings-api-url").value = apiUrl();
   $("#settings-api-key").value = apiKey();
