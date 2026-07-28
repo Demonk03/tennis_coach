@@ -20,7 +20,7 @@ def _get_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
-    return OpenAI(api_key=api_key)
+    return OpenAI(api_key=api_key, timeout=20.0, max_retries=1)
 
 
 def _complete(task: str, data: dict[str, Any], max_chars: int) -> str:
