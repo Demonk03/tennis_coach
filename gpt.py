@@ -2,6 +2,7 @@ import json
 import os
 from typing import Any
 
+import httpx
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -20,7 +21,12 @@ def _get_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is required")
-    return OpenAI(api_key=api_key, timeout=20.0, max_retries=1)
+    # Force IPv4: some container hosts (e.g. Railway) have a broken outbound
+    # IPv6 route, which makes httpx's default happy-eyeballs resolution hang
+    # or fail with "Connection error" against IPv6-advertised hosts like
+    # api.openai.com.
+    http_client = httpx.Client(transport=httpx.HTTPTransport(local_address="0.0.0.0"))
+    return OpenAI(api_key=api_key, timeout=20.0, max_retries=1, http_client=http_client)
 
 
 def _complete(task: str, data: dict[str, Any], max_chars: int) -> str:
