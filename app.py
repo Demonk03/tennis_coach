@@ -207,7 +207,7 @@ def create_prep():
     try:
         brief = gpt.generate_prep_brief(match_data, survey, oura)
     except Exception as error:
-        logger.warning("Prep advice generation failed: %s", error)
+        logger.exception("Prep advice generation failed")
         raise APIError("Не удалось получить бриф. Попробуйте ещё раз", 503, "ai_unavailable") from error
 
     match = db.create_match({**match_data, "status": "preparing"})
