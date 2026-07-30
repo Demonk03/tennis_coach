@@ -14,7 +14,7 @@ docs/ PWA (GitHub Pages)
 app.py Flask API (Railway)
         ├─ db.py → Supabase
         │          ├─ users + health_logs (существующие таблицы Oura-v2)
-        │          └─ matches + match_prep + match_events + match_reviews
+        │          └─ player_profile + matches + match_prep + match_events + match_reviews
         └─ gpt.py → OpenAI API (тренер + психолог)
 ```
 
@@ -50,7 +50,8 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 ### Новые таблицы
 
 - `matches`: контекст, структурированный текущий счёт, итог, статус.
-- `match_prep`: опрос, снимок Oura, структурированный `generated_game_plan` и legacy-тексты `generated_brief_technical`/`generated_brief_mental` для старых клиентов.
+- `player_profile`: единственный постоянный профиль игрока — уровень, опыт, стиль, сильные стороны и медицинский контекст.
+- `match_prep`: опрос, снимки Oura и профиля игрока, структурированный `generated_game_plan` и legacy-тексты `generated_brief_technical`/`generated_brief_mental` для старых клиентов.
 - `match_events`: тип, чипы, состояние, счёт, совет, idempotency key.
 - `match_reviews`: post-match анкета (`physical_rating`, `mental_rating`, `technical_comment`, `mental_comment`) и сгенерированные выводы тренера/психолога, один разбор на матч.
 
@@ -62,6 +63,8 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 - `PSYCHOLOGIST_PROMPT` — эмоции, концентрация, устойчивость.
 
 В prep используется объединённый `MATCH_PLAN_PROMPT`, который возвращает проверяемую JSON-карточку: соперник, три ориентира, тело, reset и фокус. В post-match review сохраняются два отдельных голоса. На переходах и перед новым сетом используется короткий тренерский совет. Таск-промпты внутри каждого вызова явно указывают, на каких полях DATA строить совет.
+
+Постоянный профиль передаётся как пользовательские данные, а не как system prompt. При создании плана его снимок сохраняется в `match_prep.player_profile_snapshot`; этот снимок используется на протяжении матча и при разборе. Текущее состояние из предматчевой анкеты и наблюдений имеет приоритет. Медицинский контекст используется только для безопасной дозировки нагрузки, без диагнозов, интерпретации анализов и назначения препаратов или добавок.
 
 ## Переменные окружения
 

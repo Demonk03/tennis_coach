@@ -81,6 +81,14 @@ def test_latest_oura_marks_old_record_as_stale(client, mocker):
 
 def test_create_prep_generates_before_creating_match(client, mocker):
     mocker.patch("app.db.get_active_match", return_value=None)
+    profile = {
+        "level": "клубный 3.5",
+        "experience": "3 года",
+        "playing_style": "контратакующий",
+        "strengths": "приём",
+        "medical_context": "беречь поясницу",
+    }
+    mocker.patch("app.db.get_player_profile", return_value=profile)
     mocker.patch("app.db.get_latest_oura_log", return_value={
         "id": "log-1", "date": date.today().isoformat(), "readiness_score": 82,
         "sleep_score": 79, "average_hrv": 48.0,
@@ -110,6 +118,7 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     assert response.get_json()["brief"]["mental"].startswith("Возвращай")
     assert generate.call_count == 1
     assert generate.call_args.args[3] == reviews
+    assert generate.call_args.args[4] == profile
     recent.assert_called_once_with(limit=3)
     assert create.call_count == 1
     saved = save.call_args.args[0]
@@ -117,6 +126,7 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     assert saved["generated_brief_mental"].startswith("Возвращай")
     assert saved["generated_game_plan"]["tactics"][0] == "Играй глубоко."
     assert saved["generated_game_plan"]["focus"] == "Глубина и активные ноги"
+    assert saved["player_profile_snapshot"] == profile
 
 
 def test_active_match_prevents_second_prep_and_ai_cost(client, mocker):
@@ -137,6 +147,48 @@ def test_invalid_prep_value_returns_400(client, mocker):
     response = client.post("/api/matches/prep", headers=AUTH, json=payload)
 
     assert response.status_code == 400
+
+
+def test_profile_can_be_loaded(client, mocker):
+    profile = {"level": "клубный 3.5", "playing_style": "контратакующий"}
+    get_profile = mocker.patch("app.db.get_player_profile", return_value=profile)
+
+    response = client.get("/api/profile", headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.get_json()["profile"]["level"] == "клубный 3.5"
+    get_profile.assert_called_once_with()
+
+
+def test_profile_is_validated_and_saved(client, mocker):
+    saved_profile = {
+        "id": True,
+        "level": "любитель среднего уровня",
+        "experience": "4 года",
+        "playing_style": "активная игра с задней линии",
+        "strengths": "форхенд и движение",
+        "medical_context": "история дискомфорта в пояснице",
+    }
+    save = mocker.patch("app.db.save_player_profile", return_value=saved_profile)
+
+    response = client.put("/api/profile", headers=AUTH, json={
+        key: value for key, value in saved_profile.items() if key != "id"
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["profile"]["medical_context"].startswith("история")
+    assert save.call_args.args[0]["strengths"] == "форхенд и движение"
+
+
+def test_profile_rejects_oversized_medical_context(client, mocker):
+    save = mocker.patch("app.db.save_player_profile")
+
+    response = client.put("/api/profile", headers=AUTH, json={
+        "medical_context": "x" * 1001,
+    })
+
+    assert response.status_code == 400
+    save.assert_not_called()
 
 
 def test_event_reuses_existing_idempotent_result(client, mocker):

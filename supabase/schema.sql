@@ -1,5 +1,16 @@
 create extension if not exists pgcrypto;
 
+create table if not exists player_profile (
+  id boolean primary key default true check (id),
+  level text not null default '',
+  experience text not null default '',
+  playing_style text not null default '',
+  strengths text not null default '',
+  medical_context text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists matches (
   id uuid primary key default gen_random_uuid(),
   match_date date not null default current_date,
@@ -35,6 +46,7 @@ create table if not exists match_prep (
   oura_readiness integer,
   oura_sleep_score integer,
   oura_hrv numeric,
+  player_profile_snapshot jsonb not null default '{}'::jsonb,
   energy_level integer not null check (energy_level between 1 and 5),
   last_meal text,
   physical_state text not null,
@@ -92,6 +104,12 @@ create trigger matches_set_updated_at
 before update on matches
 for each row execute function set_updated_at();
 
+drop trigger if exists player_profile_set_updated_at on player_profile;
+create trigger player_profile_set_updated_at
+before update on player_profile
+for each row execute function set_updated_at();
+
+alter table player_profile enable row level security;
 alter table matches enable row level security;
 alter table match_prep enable row level security;
 alter table match_events enable row level security;

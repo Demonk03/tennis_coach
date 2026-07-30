@@ -28,6 +28,34 @@ def test_create_match_returns_inserted_row(mocker):
     client.table.assert_called_once_with("matches")
 
 
+def test_get_player_profile_returns_singleton(mocker):
+    client = mocker.MagicMock()
+    query = client.table.return_value.select.return_value.eq.return_value.limit.return_value
+    query.execute.return_value = SimpleNamespace(data=[{"id": True, "level": "3.5"}])
+    mocker.patch("db.get_client", return_value=client)
+
+    result = db.get_player_profile()
+
+    assert result["level"] == "3.5"
+    client.table.assert_called_once_with("player_profile")
+    client.table.return_value.select.return_value.eq.assert_called_once_with("id", True)
+
+
+def test_save_player_profile_upserts_singleton(mocker):
+    client = mocker.MagicMock()
+    client.table.return_value.upsert.return_value.execute.return_value = SimpleNamespace(
+        data=[{"id": True, "level": "3.5"}]
+    )
+    mocker.patch("db.get_client", return_value=client)
+
+    result = db.save_player_profile({"level": "3.5"})
+
+    assert result["id"] is True
+    client.table.return_value.upsert.assert_called_once_with(
+        {"id": True, "level": "3.5"}, on_conflict="id"
+    )
+
+
 def test_get_match_bundle_returns_none_for_missing_match(mocker):
     mocker.patch("db.get_match", return_value=None)
 

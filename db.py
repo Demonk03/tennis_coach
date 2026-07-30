@@ -37,6 +37,28 @@ def get_latest_oura_log(user_id: str) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
+def get_player_profile() -> dict[str, Any] | None:
+    response = (
+        get_client()
+        .table("player_profile")
+        .select("*")
+        .eq("id", True)
+        .limit(1)
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def save_player_profile(payload: dict[str, Any]) -> dict[str, Any]:
+    response = (
+        get_client()
+        .table("player_profile")
+        .upsert({"id": True, **payload}, on_conflict="id")
+        .execute()
+    )
+    return response.data[0]
+
+
 def get_active_match() -> dict[str, Any] | None:
     response = (
         get_client()
