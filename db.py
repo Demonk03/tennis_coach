@@ -199,6 +199,18 @@ def cancel_match(match_id: str) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
+def delete_completed_match(match_id: str) -> dict[str, Any] | None:
+    response = (
+        get_client()
+        .table("matches")
+        .delete()
+        .eq("id", match_id)
+        .in_("status", ["completed", "cancelled"])
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
 def get_event_by_idempotency_key(key: str) -> dict[str, Any] | None:
     response = (
         get_client()

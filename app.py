@@ -421,6 +421,17 @@ def cancel_match(match_id: str):
     return jsonify({"match": match})
 
 
+@app.delete("/api/matches/<match_id>/permanent")
+@require_api_key
+def delete_completed_match(match_id: str):
+    match = db.delete_completed_match(match_id)
+    if not match:
+        raise APIError(
+            "Удалить можно только завершённый матч", 409, "invalid_match_state"
+        )
+    return jsonify({"deleted_match": match})
+
+
 @app.get("/api/matches")
 @require_api_key
 def list_matches():
