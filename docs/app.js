@@ -938,6 +938,25 @@ async function loadHistory() {
   }
 }
 
+async function deleteMatchFromHistory(match, button) {
+  const title = matchTitle(match);
+  const confirmed = window.confirm(
+    `Удалить «${title}» из истории? План, события и разбор этого матча тоже будут удалены. Это действие нельзя отменить.`,
+  );
+  if (!confirmed) return;
+
+  setBusy(button, true, "Удаляю…");
+  try {
+    await apiFetch(`/api/matches/${match.id}/permanent`, { method: "DELETE" });
+    $("#match-detail").hidden = true;
+    showToast("Матч удалён из истории");
+    await loadHistory();
+  } catch (error) {
+    showToast(error.message);
+    setBusy(button, false);
+  }
+}
+
 async function loadMatchDetail(matchId) {
   const detail = $("#match-detail");
   detail.hidden = false;
@@ -999,7 +1018,19 @@ async function loadMatchDetail(matchId) {
       });
       reviewSection.append(reviewButton);
     }
-    detail.append(heading, briefLabel, brief, timeline, reviewSection);
+    const actions = document.createElement("div");
+    actions.className = "history-actions";
+    if (bundle.match.status === "completed") {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "danger-button";
+      deleteButton.textContent = "Удалить матч из истории";
+      deleteButton.addEventListener("click", () => {
+        deleteMatchFromHistory(bundle.match, deleteButton);
+      });
+      actions.append(deleteButton);
+    }
+    detail.append(heading, briefLabel, brief, timeline, reviewSection, actions);
     detail.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     detail.hidden = true;

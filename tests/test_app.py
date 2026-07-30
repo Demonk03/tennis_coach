@@ -373,3 +373,24 @@ def test_review_ai_failure_does_not_save_partial_result(client, mocker):
     assert response.status_code == 503
     assert response.get_json()["error"]["code"] == "ai_unavailable"
     save.assert_not_called()
+
+
+def test_completed_match_can_be_permanently_deleted(client, mocker):
+    delete = mocker.patch("app.db.delete_completed_match", return_value={
+        "id": "match-1", "status": "completed",
+    })
+
+    response = client.delete("/api/matches/match-1/permanent", headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.get_json()["deleted_match"]["id"] == "match-1"
+    delete.assert_called_once_with("match-1")
+
+
+def test_active_match_cannot_be_permanently_deleted(client, mocker):
+    mocker.patch("app.db.delete_completed_match", return_value=None)
+
+    response = client.delete("/api/matches/match-1/permanent", headers=AUTH)
+
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "invalid_match_state"

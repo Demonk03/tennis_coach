@@ -97,3 +97,18 @@ def test_list_matches_still_excludes_cancelled(mocker):
     db.list_matches()
 
     client.table.return_value.select.return_value.neq.assert_called_once_with("status", "cancelled")
+
+
+def test_delete_completed_match_is_limited_to_terminal_statuses(mocker):
+    client = mocker.MagicMock()
+    query = client.table.return_value.delete.return_value.eq.return_value.in_.return_value
+    query.execute.return_value = SimpleNamespace(data=[{"id": "match-1", "status": "completed"}])
+    mocker.patch("db.get_client", return_value=client)
+
+    result = db.delete_completed_match("match-1")
+
+    assert result["id"] == "match-1"
+    client.table.return_value.delete.return_value.eq.assert_called_once_with("id", "match-1")
+    client.table.return_value.delete.return_value.eq.return_value.in_.assert_called_once_with(
+        "status", ["completed", "cancelled"]
+    )

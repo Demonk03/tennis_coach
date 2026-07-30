@@ -253,6 +253,8 @@ button:disabled { opacity: .55; cursor: wait; }
 .history-detail-heading h3 { margin: 0; font-size: 22px; }
 .history-review { margin-top: 22px; }
 .history-review > .secondary-button { width: 100%; }
+.history-actions { display: grid; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+.history-actions:empty { display: none; }
 .timeline { display: grid; gap: 12px; border-left: 2px solid rgba(199,239,91,.22); margin-left: 6px; padding-left: 18px; }
 .timeline article { position: relative; }
 .timeline article::before { content: ""; position: absolute; left: -24px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--lime); }

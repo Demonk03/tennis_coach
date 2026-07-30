@@ -85,3 +85,15 @@ def test_match_score_uses_scrollable_set_wheels():
     assert "function createScoreWheel" in javascript
     assert "scroll-snap-type: y mandatory" in stylesheet
     assert ".score-wheel-option.is-selected" in stylesheet
+
+
+def test_completed_match_can_be_deleted_from_history_with_confirmation():
+    javascript = (DOCS / "app.js").read_text()
+    stylesheet = (DOCS / "style.css").read_text()
+
+    assert "function deleteMatchFromHistory" in javascript
+    assert "window.confirm" in javascript
+    assert 'method: "DELETE"' in javascript
+    assert "/permanent" in javascript
+    assert "Удалить матч из истории" in javascript
+    assert ".history-actions" in stylesheet
