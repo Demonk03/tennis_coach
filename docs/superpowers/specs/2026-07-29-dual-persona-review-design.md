@@ -21,7 +21,9 @@
 - **Тренер** — тактика, физическая дозировка.
 - **Психолог** — ментальный фокус.
 
-Тренер дополнительно видит выводы из последних review (см. ниже), психолог — тоже.
+Тренер дополнительно видит выводы из последних review (см. ниже), психолог — тоже. Если прошлых review ещё нет (первый матч или все предыдущие без разбора), `past_reviews` передаётся как пустой список — промпты обоих голосов должны явно не выдумывать паттерны и опираться только на текущий бриф, как того требует принцип `SYSTEM_PROMPT` "не придумывай статистику".
+
+`app.py:create_prep` перед вызовом `gpt.generate_prep_brief` дополнительно вызывает `db.get_recent_reviews(limit=3)` и передаёт результат четвёртым аргументом.
 
 ### 2. Пост-матчевый разбор (новый сценарий)
 
@@ -37,6 +39,8 @@
 Выход: два отдельных summary — от тренера (по `technical_comment` + `physical_rating`) и от психолога (по `mental_comment` + `mental_rating`). Каждое summary — по сути вывод на будущее, а не просто пересказ.
 
 Результат сохраняется и переиспользуется: последние N review подтягиваются в контекст следующего prep-брифа, чтобы тренер и психолог видели, что отмечали в прошлый раз.
+
+Prep для матча может отсутствовать (если `db.save_prep` упал в `create_prep`, матч отменяется без записи в `match_prep` — см. текущий `app.py`). `generate_post_match_review` должен принимать `prep=None` и не ссылаться на бриф в этом случае — оба голоса анализируют только `review_input`.
 
 ## Контекст AI
 
@@ -77,12 +81,15 @@ app.py
 `match_prep`: одна колонка `generated_brief` заменяется на две.
 
 ```sql
-alter table match_prep drop column generated_brief;
 alter table match_prep add column generated_brief_technical text not null default '';
 alter table match_prep add column generated_brief_mental text not null default '';
+update match_prep set generated_brief_technical = generated_brief where generated_brief_technical = '';
 alter table match_prep alter column generated_brief_technical drop default;
 alter table match_prep alter column generated_brief_mental drop default;
+alter table match_prep drop column generated_brief;
 ```
+
+Принцип проекта — "история должна быть неизменной" (снимок Oura копируется в `match_prep`, а не пересчитывается). Прямой `drop column generated_brief` без бэкфилла нарушал бы это: старые брифы исчезли бы безвозвратно. Поэтому исторический текст переносится в `generated_brief_technical` (единственное поле, где он был "тренерским" по смыслу — до этой фичи бриф был one-voice и ближе к тренеру), `generated_brief_mental` для старых записей остаётся пустой строкой. Это осознанный компромисс, а не полная миграция данных: старые брифы не ретроактивно разделяются на два голоса.
 
 Новая таблица `match_reviews` — один review на матч:
 
@@ -141,11 +148,13 @@ create index if not exists match_reviews_created_at_idx on match_reviews(created
 - `physical_rating`, `mental_rating` — целое 1–5;
 - `technical_comment`, `mental_comment` — обязательные, max_length 500.
 
+Требует `@require_api_key`, как все остальные роуты.
+
 Правила состояния:
 
 - 404 `not_found`, если матч не найден;
 - 409 `invalid_match_state`, если статус матча не `completed`/`cancelled`;
-- 409 `review_already_exists`, если review для этого `match_id` уже есть.
+- 409 `review_already_exists`, если review для этого `match_id` уже есть — источник истины здесь unique-констрейнт `match_reviews.match_id` в БД (как `matches_one_active_idx` для активного матча), а не pre-check без гарантий: инсерт оборачивается в try/except на нарушение уникальности, потому что pre-check-затем-insert оставляет гонку при двойной отправке формы.
 
 Ответ (201):
 
@@ -162,6 +171,8 @@ create index if not exists match_reviews_created_at_idx on match_reviews(created
 ## Frontend (PWA)
 
 **Экран подготовки** — `#prep-result` вместо одного `<p id="prep-brief">` показывает два блока `.voice-card` (тренер / психолог). Этот же визуальный паттерн переиспользуется в review — единый язык «двух голосов» во всём приложении.
+
+В `app.js` три места ссылаются на старое поле `generated_brief` и должны быть обновлены на `generated_brief_technical`/`generated_brief_mental` (или `brief.technical`/`brief.mental` для ответа `/prep`): восстановление активного матча, обработка результата `POST /api/matches/prep`, и рендер брифа в `match-detail` истории (там же нужно учесть старые записи, где `generated_brief_mental` пуст — показывать только тренерский блок, если психологического текста нет).
 
 **Пост-матчевый review** — доступен в двух местах:
 
