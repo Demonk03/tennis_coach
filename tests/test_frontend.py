@@ -33,3 +33,15 @@ def test_frontend_config_does_not_contain_secret():
 
     assert "API_KEY" not in config
     assert "Bearer" not in config
+
+
+def test_match_history_exposes_result_and_set_winner_styles():
+    javascript = (DOCS / "app.js").read_text()
+    stylesheet = (DOCS / "style.css").read_text()
+
+    assert 'badge.textContent = "W"' in javascript
+    assert 'badge.textContent = "L"' in javascript
+    assert 'set.self > set.opponent ? "strong"' in javascript
+    assert 'set.opponent > set.self ? "strong"' in javascript
+    assert ".match-list-item.result-win" in stylesheet
+    assert ".match-list-item.result-loss" in stylesheet

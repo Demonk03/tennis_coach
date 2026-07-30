@@ -11,11 +11,11 @@ GitHub: https://github.com/Demonk03/tennis_coach
 ```text
 docs/ PWA (GitHub Pages)
         ↓ Bearer API key
-app.py Flask API (Render)
+app.py Flask API (Railway)
         ├─ db.py → Supabase
         │          ├─ users + health_logs (существующие таблицы Oura-v2)
-        │          └─ matches + match_prep + match_events
-        └─ gpt.py → OpenAI API
+        │          └─ matches + match_prep + match_events + match_reviews
+        └─ gpt.py → OpenAI API (тренер + психолог)
 ```
 
 Tennis-coach никогда не вызывает Oura API. Он только читает последнюю строку `health_logs` по `OURA_USER_ID`. Значения копируются в `match_prep`, чтобы история была неизменной.
@@ -28,9 +28,10 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 | `db.py` | Все обращения к Supabase |
 | `gpt.py` | Промпты и вызовы OpenAI |
 | `supabase/schema.sql` | Tennis-таблицы, ограничения, индексы, RLS |
+| `supabase/migrations/` | Инкрементальные миграции для уже созданного Supabase-проекта |
+| `render.yaml` | Конфигурация Render — не используется, реальный хостинг backend — Railway |
 | `docs/` | Статический mobile-first PWA |
 | `tests/` | Unit/API tests без внешних сервисов |
-| `render.yaml` | Конфигурация Render |
 
 ## Жизненный цикл
 
@@ -40,6 +41,7 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 - PWA восстанавливает состояние через `GET /api/matches/active`.
 - События имеют UUID `idempotency_key`.
 - Завершение переводит матч в `completed`; отмена — в `cancelled`.
+- `POST /api/matches/:id/review` доступен только для `completed`/`cancelled` матчей, один разбор на матч (unique constraint на `match_id`, повтор → 409 `review_already_exists`).
 
 ## Supabase
 
@@ -48,8 +50,18 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 ### Новые таблицы
 
 - `matches`: контекст, структурированный текущий счёт, итог, статус.
-- `match_prep`: опрос, снимок Oura и подготовительный бриф.
+- `match_prep`: опрос, снимок Oura, `generated_brief_technical` (тренер) и `generated_brief_mental` (психолог).
 - `match_events`: тип, чипы, состояние, счёт, совет, idempotency key.
+- `match_reviews`: post-match анкета (`physical_rating`, `mental_rating`, `technical_comment`, `mental_comment`) и сгенерированные выводы тренера/психолога, один разбор на матч.
+
+## Персоны в gpt.py
+
+Каждый AI-текст генерируется от лица одной из двух персон через отдельный system prompt:
+
+- `COACH_PROMPT` — техника, тактика, физическое состояние, дозировка нагрузки.
+- `PSYCHOLOGIST_PROMPT` — эмоции, концентрация, устойчивость.
+
+Оба используются во всех точках генерации (prep, post-match review, changeover/new set advice) — не только в prep/review. Таск-промпты внутри каждого вызова явно указывают, на каких полях DATA строить совет (не общие формулировки).
 
 ## Переменные окружения
 
@@ -78,3 +90,4 @@ node --check docs/app.js
 - Нет multi-user, полного offline, голоса и автоматического скоринга по очкам.
 - Экран статистических паттернов отложен до накопления 8–10 матчей.
 - Деплой и применение SQL требуют реальных секретов и выполняются отдельно.
+- Известная блокирующая проблема (на 2026-07-30): запросы из Safari к защищённым endpoint'ам на Railway (`tenniscoach-production.up.railway.app`) зависают без HTTP-ответа. `/api/health` (без auth и Supabase) отвечал нормально. Подробности и диагностика — в заметке Obsidian проекта.
