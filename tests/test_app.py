@@ -88,6 +88,11 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     reviews = [{"generated_technical_summary": "Спокойнее на приёме"}]
     recent = mocker.patch("app.db.get_recent_reviews", return_value=reviews)
     generate = mocker.patch("app.gpt.generate_prep_brief", return_value={
+        "opponent_cue": "Соперник любит контратаковать.",
+        "tactics": ["Играй глубоко.", "Не открывай углы рано.", "Возвращайся в позицию."],
+        "body": "Начни без форсирования.",
+        "reset": "Отвернись → выдохни → выбери цель.",
+        "focus": "Глубина и активные ноги",
         "technical": "Глубоко играй под бэкхэнд.",
         "mental": "Возвращай внимание к следующему мячу.",
     })
@@ -110,6 +115,8 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     saved = save.call_args.args[0]
     assert saved["generated_brief_technical"].startswith("Глубоко")
     assert saved["generated_brief_mental"].startswith("Возвращай")
+    assert saved["generated_game_plan"]["tactics"][0] == "Играй глубоко."
+    assert saved["generated_game_plan"]["focus"] == "Глубина и активные ноги"
 
 
 def test_active_match_prevents_second_prep_and_ai_cost(client, mocker):

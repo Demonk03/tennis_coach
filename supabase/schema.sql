@@ -41,6 +41,7 @@ create table if not exists match_prep (
   mindset text not null,
   generated_brief_technical text not null,
   generated_brief_mental text not null,
+  generated_game_plan jsonb,
   created_at timestamptz not null default now()
 );
 
