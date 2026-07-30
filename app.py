@@ -46,7 +46,7 @@ def add_cors_headers(response):
     if origin and origin.rstrip("/") in _allowed_origins():
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -189,6 +189,26 @@ def latest_oura():
     return jsonify({"oura": _oura_snapshot()})
 
 
+@app.get("/api/profile")
+@require_api_key
+def get_profile():
+    return jsonify({"profile": db.get_player_profile()})
+
+
+@app.put("/api/profile")
+@require_api_key
+def save_profile():
+    payload = _json()
+    profile = {
+        "level": _text(payload, "level", required=False, max_length=100),
+        "experience": _text(payload, "experience", required=False, max_length=200),
+        "playing_style": _text(payload, "playing_style", required=False, max_length=500),
+        "strengths": _text(payload, "strengths", required=False, max_length=500),
+        "medical_context": _text(payload, "medical_context", required=False, max_length=1000),
+    }
+    return jsonify({"profile": db.save_player_profile(profile)})
+
+
 @app.post("/api/matches/prep")
 @require_api_key
 def create_prep():
@@ -213,9 +233,12 @@ def create_prep():
     }
     oura = _oura_snapshot() if payload.get("use_oura", True) else None
 
+    player_profile = db.get_player_profile()
     past_reviews = db.get_recent_reviews(limit=3)
     try:
-        brief = gpt.generate_prep_brief(match_data, survey, oura, past_reviews)
+        brief = gpt.generate_prep_brief(
+            match_data, survey, oura, past_reviews, player_profile
+        )
     except Exception as error:
         logger.exception("Prep advice generation failed")
         raise APIError("Не удалось получить бриф. Попробуйте ещё раз", 503, "ai_unavailable") from error
@@ -234,6 +257,7 @@ def create_prep():
             "oura_readiness": oura.get("readiness") if oura else None,
             "oura_sleep_score": oura.get("sleep_score") if oura else None,
             "oura_hrv": oura.get("average_hrv") if oura else None,
+            "player_profile_snapshot": player_profile or {},
             **survey,
             "generated_brief_technical": brief["technical"],
             "generated_brief_mental": brief["mental"],

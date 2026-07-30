@@ -129,9 +129,23 @@
         </div>
 
         <form id="score-form" class="score-form">
-          <label>Сеты / геймы
-            <input id="score-sets" placeholder="6-4 2-3" maxlength="80">
-          </label>
+          <section class="set-score-picker" aria-labelledby="set-score-picker-title">
+            <div class="set-score-picker-heading">
+              <div>
+                <p id="set-score-picker-title" class="score-field-label">Геймы по сетам</p>
+                <p class="score-picker-hint">Крутите цифры вверх или вниз</p>
+              </div>
+              <div class="score-side-labels" aria-hidden="true">
+                <span>Я</span><span>Соперник</span>
+              </div>
+            </div>
+            <div id="set-score-rows" class="set-score-rows"></div>
+            <input id="score-sets" type="hidden">
+            <div class="set-score-actions">
+              <button id="add-set-button" class="set-score-action" type="button">＋ Добавить сет</button>
+              <button id="remove-set-button" class="set-score-action set-score-action-muted" type="button">Убрать последний</button>
+            </div>
+          </section>
           <label>Очки
             <select id="score-game">
               <option>0-0</option><option>15-0</option><option>0-15</option>
@@ -189,6 +203,42 @@
       <article id="match-detail" class="history-detail" hidden></article>
     </section>
 
+    <section id="screen-profile" class="screen" hidden aria-labelledby="profile-title">
+      <div class="hero compact">
+        <p class="eyebrow">ПОСТОЯННЫЙ КОНТЕКСТ</p>
+        <h2 id="profile-title">Мой профиль</h2>
+        <p>Тренер учитывает эти данные во всех новых планах. Самочувствие на сегодня по-прежнему заполняется перед матчем.</p>
+      </div>
+      <form id="profile-form" class="stack-form">
+        <fieldset>
+          <legend>Моя игра</legend>
+          <label>Уровень
+            <input name="level" maxlength="100" placeholder="Например, клубный 3.5 или любитель среднего уровня">
+          </label>
+          <label>Опыт
+            <input name="experience" maxlength="200" placeholder="Сколько играю, тренировки и матчи">
+          </label>
+          <label>Стиль игры
+            <textarea name="playing_style" maxlength="500" placeholder="Как строю розыгрыши, где предпочитаю играть, какой темп комфортен"></textarea>
+          </label>
+          <label>Сильные стороны
+            <textarea name="strengths" maxlength="500" placeholder="Удары, движение, тактические и ментальные качества"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Здоровье и ограничения</legend>
+          <label>Постоянный медицинский контекст
+            <textarea name="medical_context" maxlength="1000" placeholder="Например, особенности спины, железо, старые травмы и ограничения врача"></textarea>
+          </label>
+          <p class="form-note">Тренер использует это только для безопасной корректировки нагрузки. Текущее самочувствие всегда важнее и указывается перед матчем.</p>
+        </fieldset>
+
+        <button id="profile-submit" class="primary-button" type="submit">Сохранить профиль</button>
+      </form>
+      <p id="profile-status" class="status-message" aria-live="polite"></p>
+    </section>
+
     <section id="screen-settings" class="screen" hidden aria-labelledby="settings-title">
       <div class="hero compact">
         <p class="eyebrow">ЭТО УСТРОЙСТВО</p>
@@ -212,6 +262,7 @@
     <button data-screen="prep" class="active"><span>◎</span>Подготовка</button>
     <button data-screen="match"><span>◫</span>Матч</button>
     <button data-screen="history"><span>≡</span>История</button>
+    <button data-screen="profile"><span>♙</span>Профиль</button>
     <button data-screen="settings"><span>⚙</span>Настройки</button>
   </nav>
 

@@ -58,3 +58,30 @@ def test_prep_uses_structured_match_plan_with_legacy_fallback():
     assert 'id="prep-plan"' in html
     assert ".plan-tactics" in stylesheet
     assert ".plan-focus" in stylesheet
+
+
+def test_profile_screen_collects_durable_context():
+    javascript = (DOCS / "app.js").read_text()
+    html = (DOCS / "index.html").read_text()
+
+    assert 'id="screen-profile"' in html
+    assert 'name="level"' in html
+    assert 'name="experience"' in html
+    assert 'name="playing_style"' in html
+    assert 'name="strengths"' in html
+    assert 'name="medical_context"' in html
+    assert 'apiFetch("/api/profile"' in javascript
+    assert 'method: "PUT"' in javascript
+
+
+def test_match_score_uses_scrollable_set_wheels():
+    javascript = (DOCS / "app.js").read_text()
+    html = (DOCS / "index.html").read_text()
+    stylesheet = (DOCS / "style.css").read_text()
+
+    assert 'id="set-score-rows"' in html
+    assert 'id="add-set-button"' in html
+    assert 'id="remove-set-button"' in html
+    assert "function createScoreWheel" in javascript
+    assert "scroll-snap-type: y mandatory" in stylesheet
+    assert ".score-wheel-option.is-selected" in stylesheet

@@ -7,9 +7,15 @@ const TOPICS = [
   { key: "net", label: "Игра у сетки" },
 ];
 
+const SCORE_WHEEL_ITEM_HEIGHT = 44;
+const MAX_MATCH_SETS = 5;
+const DEFAULT_MAX_GAMES = 12;
+
 const state = {
   activeBundle: null,
   oura: null,
+  profile: null,
+  profileLoaded: false,
   flow: null,
   toastTimer: null,
 };
@@ -241,7 +247,13 @@ function showScreen(name) {
   $$(".screen").forEach((screen) => { screen.hidden = screen.id !== `screen-${name}`; });
   $$(".bottom-nav button").forEach((button) => button.classList.toggle("active", button.dataset.screen === name));
   window.scrollTo({ top: 0, behavior: "smooth" });
+  if (name === "match") {
+    requestAnimationFrame(() => {
+      $$(".score-wheel").forEach((wheel) => selectWheelValue(wheel, wheel.dataset.value));
+    });
+  }
   if (name === "history") loadHistory();
+  if (name === "profile") loadProfile();
 }
 
 function formatDate(value) {
@@ -255,16 +267,162 @@ function displayScore(score) {
   return [score.sets, score.game].filter(Boolean).join(" · ") || "0–0";
 }
 
+function parseSetScores(value) {
+  const scores = [...String(value || "").matchAll(/(\d+)\s*[-:]\s*(\d+)/g)]
+    .map((match) => ({ self: Number(match[1]), opponent: Number(match[2]) }))
+    .slice(0, MAX_MATCH_SETS);
+  return scores.length ? scores : [{ self: 0, opponent: 0 }];
+}
+
+function serializeSetScores() {
+  const rows = $$(".set-score-row").map((row) => ({
+    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
+    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
+  }));
+  const hasPlayedGames = rows.some((set) => set.self > 0 || set.opponent > 0);
+  if (!hasPlayedGames && rows.length === 1) return "";
+  return rows.map((set) => `${set.self}-${set.opponent}`).join(" ");
+}
+
+function updateScoreFromWheels() {
+  $("#score-sets").value = serializeSetScores();
+  $("#score-display").textContent = displayScore(currentScore());
+}
+
+function markWheelValue(wheel, value) {
+  const max = Number(wheel.dataset.max);
+  const nextValue = Math.max(0, Math.min(max, Number(value) || 0));
+  wheel.dataset.value = String(nextValue);
+  wheel.querySelectorAll(".score-wheel-option").forEach((option) => {
+    const selected = Number(option.dataset.value) === nextValue;
+    option.classList.toggle("is-selected", selected);
+    option.setAttribute("aria-selected", String(selected));
+  });
+  return nextValue;
+}
+
+function selectWheelValue(wheel, value, behavior = "auto") {
+  const nextValue = markWheelValue(wheel, value);
+  wheel.scrollTo({ top: nextValue * SCORE_WHEEL_ITEM_HEIGHT, behavior });
+}
+
+function createScoreWheel(side, value) {
+  const wheel = document.createElement("div");
+  const max = Math.max(DEFAULT_MAX_GAMES, Number(value) || 0);
+  wheel.className = "score-wheel";
+  wheel.tabIndex = 0;
+  wheel.setAttribute("role", "listbox");
+  wheel.dataset.side = side;
+  wheel.dataset.max = String(max);
+  wheel.setAttribute("aria-label", side === "self" ? "Мои геймы" : "Геймы соперника");
+
+  const spacerBefore = document.createElement("div");
+  spacerBefore.className = "score-wheel-spacer";
+  spacerBefore.setAttribute("aria-hidden", "true");
+  wheel.append(spacerBefore);
+
+  for (let game = 0; game <= max; game += 1) {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "score-wheel-option";
+    option.dataset.value = String(game);
+    option.setAttribute("role", "option");
+    option.textContent = game;
+    option.addEventListener("click", () => {
+      selectWheelValue(wheel, game, "smooth");
+      updateScoreFromWheels();
+    });
+    wheel.append(option);
+  }
+
+  const spacerAfter = document.createElement("div");
+  spacerAfter.className = "score-wheel-spacer";
+  spacerAfter.setAttribute("aria-hidden", "true");
+  wheel.append(spacerAfter);
+
+  let scrollFrame = null;
+  wheel.addEventListener("scroll", () => {
+    if (scrollFrame) cancelAnimationFrame(scrollFrame);
+    scrollFrame = requestAnimationFrame(() => {
+      markWheelValue(wheel, Math.round(wheel.scrollTop / SCORE_WHEEL_ITEM_HEIGHT));
+      updateScoreFromWheels();
+    });
+  }, { passive: true });
+  wheel.addEventListener("keydown", (event) => {
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    let nextValue = Number(wheel.dataset.value);
+    if (event.key === "ArrowUp") nextValue -= 1;
+    if (event.key === "ArrowDown") nextValue += 1;
+    if (event.key === "Home") nextValue = 0;
+    if (event.key === "End") nextValue = max;
+    selectWheelValue(wheel, nextValue, "smooth");
+    updateScoreFromWheels();
+  });
+
+  requestAnimationFrame(() => selectWheelValue(wheel, value));
+  return wheel;
+}
+
+function renderSetScoreRows(scores) {
+  const container = $("#set-score-rows");
+  const rows = scores.slice(0, MAX_MATCH_SETS).map((set, index) => {
+    const row = document.createElement("div");
+    row.className = "set-score-row";
+    row.dataset.set = String(index + 1);
+
+    const title = document.createElement("span");
+    title.className = "set-score-row-title";
+    title.textContent = `${index + 1} сет`;
+
+    const divider = document.createElement("span");
+    divider.className = "set-score-divider";
+    divider.setAttribute("aria-hidden", "true");
+    divider.textContent = ":";
+
+    row.append(
+      title,
+      createScoreWheel("self", set.self),
+      divider,
+      createScoreWheel("opponent", set.opponent),
+    );
+    return row;
+  });
+  container.replaceChildren(...rows);
+  $("#add-set-button").disabled = rows.length >= MAX_MATCH_SETS;
+  $("#remove-set-button").disabled = rows.length <= 1;
+  updateScoreFromWheels();
+}
+
+function addSetScoreRow() {
+  const scores = $$(".set-score-row").map((row) => ({
+    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
+    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
+  }));
+  if (scores.length >= MAX_MATCH_SETS) return;
+  renderSetScoreRows([...scores, { self: 0, opponent: 0 }]);
+  $("#set-score-rows").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function removeSetScoreRow() {
+  const scores = $$(".set-score-row").map((row) => ({
+    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
+    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
+  }));
+  if (scores.length <= 1) return;
+  renderSetScoreRows(scores.slice(0, -1));
+}
+
 function currentScore() {
   return {
-    sets: $("#score-sets").value.trim(),
+    sets: serializeSetScores(),
     game: $("#score-game").value,
     serving: $("#score-serving").value,
   };
 }
 
 function setScoreFields(score = {}) {
-  $("#score-sets").value = score.sets || "";
+  renderSetScoreRows(parseSetScores(score.sets));
   $("#score-game").value = score.game || "0-0";
   $("#score-serving").value = score.serving || "unknown";
   $("#score-display").textContent = displayScore(score);
@@ -315,6 +473,59 @@ async function loadOura() {
   } catch (error) {
     renderOura(null);
     showToast(error.message);
+  }
+}
+
+function fillProfileForm(profile = {}) {
+  const form = $("#profile-form");
+  ["level", "experience", "playing_style", "strengths", "medical_context"].forEach((field) => {
+    form.elements.namedItem(field).value = profile[field] || "";
+  });
+}
+
+async function loadProfile(force = false) {
+  if (!apiKey() || (state.profileLoaded && !force)) return;
+  const status = $("#profile-status");
+  status.className = "status-message";
+  status.textContent = "Загружаю профиль…";
+  try {
+    const result = await apiFetch("/api/profile");
+    state.profile = result.profile;
+    state.profileLoaded = true;
+    fillProfileForm(result.profile || {});
+    status.textContent = result.profile
+      ? "Профиль сохранён и будет учтён в следующем плане."
+      : "Заполните профиль, чтобы персонализировать советы.";
+  } catch (error) {
+    status.className = "status-message error";
+    status.textContent = error.message;
+  }
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $("#profile-submit");
+  const status = $("#profile-status");
+  const payload = Object.fromEntries(new FormData(form).entries());
+  setBusy(button, true, "Сохраняю…");
+  status.className = "status-message";
+  status.textContent = "Сохраняю профиль…";
+  try {
+    const result = await apiFetch("/api/profile", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    state.profile = result.profile;
+    state.profileLoaded = true;
+    fillProfileForm(result.profile || {});
+    status.className = "status-message success";
+    status.textContent = "Профиль сохранён. Новый план будет учитывать его.";
+  } catch (error) {
+    status.className = "status-message error";
+    status.textContent = error.message;
+  } finally {
+    setBusy(button, false);
   }
 }
 
@@ -803,6 +1014,7 @@ async function saveSettings(event) {
   const status = $("#settings-status");
   localStorage.setItem("tennisCoachApiUrl", $("#settings-api-url").value.trim().replace(/\/$/, ""));
   localStorage.setItem("tennisCoachApiKey", $("#settings-api-key").value.trim());
+  state.profileLoaded = false;
   setBusy(button, true, "Проверяю…");
   status.className = "status-message";
   status.textContent = "Проверяю подключение…";
@@ -810,7 +1022,7 @@ async function saveSettings(event) {
     await apiFetch("/api/matches/active");
     status.className = "status-message success";
     status.textContent = "Подключение работает.";
-    await Promise.all([loadOura(), restoreActiveMatch()]);
+    await Promise.all([loadOura(), restoreActiveMatch(), loadProfile(true)]);
   } catch (error) {
     status.className = "status-message error";
     status.textContent = error.message;
@@ -826,13 +1038,15 @@ function bindEvents() {
   $("#prep-form").addEventListener("submit", submitPrep);
   $("#start-match").addEventListener("click", startMatch);
   $("#score-form").addEventListener("submit", saveScore);
-  $("#score-sets").addEventListener("input", () => { $("#score-display").textContent = displayScore(currentScore()); });
+  $("#add-set-button").addEventListener("click", addSetScoreRow);
+  $("#remove-set-button").addEventListener("click", removeSetScoreRow);
   $("#score-game").addEventListener("change", () => { $("#score-display").textContent = displayScore(currentScore()); });
   $("#changeover-button").addEventListener("click", () => startCardFlow("changeover"));
   $("#new-set-button").addEventListener("click", () => startCardFlow("new_set"));
   $("#finish-form").addEventListener("submit", finishMatch);
   $("#cancel-match").addEventListener("click", cancelMatch);
   $("#refresh-history").addEventListener("click", loadHistory);
+  $("#profile-form").addEventListener("submit", saveProfile);
   $("#settings-form").addEventListener("submit", saveSettings);
 }
 
@@ -859,7 +1073,7 @@ async function boot() {
     $("#settings-status").textContent = "Сохраните параметры, чтобы начать.";
     return;
   }
-  await Promise.all([loadOura(), restoreActiveMatch()]);
+  await Promise.all([loadOura(), restoreActiveMatch(), loadProfile()]);
 }
 
 boot();
