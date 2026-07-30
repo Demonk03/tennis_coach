@@ -89,6 +89,72 @@ function renderVoices(container, technical, mental) {
   container.replaceChildren(...cards);
 }
 
+function planSection(label, text, kind = "") {
+  const section = document.createElement("section");
+  section.className = `plan-section ${kind}`.trim();
+  const title = document.createElement("p");
+  title.className = "plan-label";
+  title.textContent = label;
+  const body = document.createElement("p");
+  body.className = "plan-copy";
+  body.textContent = text;
+  section.append(title, body);
+  return section;
+}
+
+function isStructuredPlan(plan) {
+  return Boolean(
+    plan
+    && typeof plan.opponent_cue === "string"
+    && Array.isArray(plan.tactics)
+    && plan.tactics.length === 3
+    && typeof plan.body === "string"
+    && typeof plan.reset === "string"
+    && typeof plan.focus === "string"
+  );
+}
+
+function renderMatchPlan(container, plan, fallbackTechnical = "", fallbackMental = "") {
+  if (!isStructuredPlan(plan)) {
+    container.className = "voice-grid compact";
+    renderVoices(container, fallbackTechnical, fallbackMental);
+    return;
+  }
+
+  container.className = "match-plan";
+  const opponent = planSection("Соперник", plan.opponent_cue, "plan-opponent");
+
+  const tactics = document.createElement("section");
+  tactics.className = "plan-section plan-tactics";
+  const tacticsTitle = document.createElement("p");
+  tacticsTitle.className = "plan-label";
+  tacticsTitle.textContent = "Твои ориентиры";
+  const tacticsList = document.createElement("ol");
+  plan.tactics.forEach((item) => {
+    const tactic = document.createElement("li");
+    tactic.textContent = item;
+    tacticsList.append(tactic);
+  });
+  tactics.append(tacticsTitle, tacticsList);
+
+  const support = document.createElement("div");
+  support.className = "plan-support";
+  support.append(
+    planSection("Тело", plan.body, "plan-body"),
+    planSection("Между розыгрышами", plan.reset, "plan-reset"),
+  );
+
+  const focus = document.createElement("p");
+  focus.className = "plan-focus";
+  const focusLabel = document.createElement("span");
+  focusLabel.textContent = "Фокус";
+  const focusText = document.createElement("strong");
+  focusText.textContent = plan.focus;
+  focus.append(focusLabel, focusText);
+
+  container.replaceChildren(opponent, tactics, support, focus);
+}
+
 function renderReviewSummary(container, summary, showHistoryButton = false) {
   container.hidden = false;
   container.replaceChildren();
@@ -212,7 +278,7 @@ function renderOura(oura) {
 
   if (!oura) {
     $("#oura-title").textContent = "Данных пока нет";
-    $("#oura-meta").textContent = "Бриф можно получить без показателей Oura.";
+    $("#oura-meta").textContent = "План можно получить без показателей Oura.";
     $("#oura-metrics").replaceChildren();
     checkbox.checked = false;
     checkbox.disabled = true;
@@ -272,9 +338,10 @@ function renderActiveBundle(bundle) {
 
   $("#prep-form").hidden = true;
   $("#prep-result").hidden = false;
-  renderVoices(
-    $("#prep-voices"),
-    bundle.prep?.generated_brief_technical || "Бриф готов.",
+  renderMatchPlan(
+    $("#prep-plan"),
+    bundle.prep?.generated_game_plan,
+    bundle.prep?.generated_brief_technical || "План готов.",
     bundle.prep?.generated_brief_mental || "",
   );
   $("#start-match").textContent = started ? "Вернуться в матч" : "Начать матч";
@@ -311,8 +378,19 @@ async function submitPrep(event) {
       method: "POST",
       body: JSON.stringify(payload),
     });
-    state.activeBundle = { match: result.match, prep: result.prep, events: [] };
-    renderVoices($("#prep-voices"), result.brief.technical, result.brief.mental);
+    const generatedGamePlan = {
+      opponent_cue: result.brief.opponent_cue,
+      tactics: result.brief.tactics,
+      body: result.brief.body,
+      reset: result.brief.reset,
+      focus: result.brief.focus,
+    };
+    state.activeBundle = {
+      match: result.match,
+      prep: { ...result.prep, generated_game_plan: generatedGamePlan },
+      events: [],
+    };
+    renderMatchPlan($("#prep-plan"), generatedGamePlan, result.brief.technical, result.brief.mental);
     $("#prep-result").hidden = false;
     $("#prep-result").scrollIntoView({ behavior: "smooth", block: "center" });
     renderActiveBundle(state.activeBundle);
@@ -665,19 +743,20 @@ async function loadMatchDetail(matchId) {
     heading.append(headingTitle, matchResult(bundle.match));
     const briefLabel = document.createElement("p");
     briefLabel.className = "eyebrow";
-    briefLabel.textContent = "БРИФ";
+    briefLabel.textContent = "ПЛАН НА МАТЧ";
     const brief = document.createElement("div");
-    brief.className = "voice-grid compact";
+    brief.className = "match-plan compact";
     if (bundle.prep) {
-      renderVoices(
+      renderMatchPlan(
         brief,
+        bundle.prep.generated_game_plan,
         bundle.prep.generated_brief_technical,
         bundle.prep.generated_brief_mental,
       );
     } else {
       const missingBrief = document.createElement("p");
       missingBrief.className = "muted";
-      missingBrief.textContent = "Без подготовительного брифа";
+      missingBrief.textContent = "Без подготовительного плана";
       brief.append(missingBrief);
     }
     const timeline = document.createElement("div");

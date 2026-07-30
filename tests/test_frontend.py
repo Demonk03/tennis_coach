@@ -45,3 +45,16 @@ def test_match_history_exposes_result_and_set_winner_styles():
     assert 'set.opponent > set.self ? "strong"' in javascript
     assert ".match-list-item.result-win" in stylesheet
     assert ".match-list-item.result-loss" in stylesheet
+
+
+def test_prep_uses_structured_match_plan_with_legacy_fallback():
+    javascript = (DOCS / "app.js").read_text()
+    html = (DOCS / "index.html").read_text()
+    stylesheet = (DOCS / "style.css").read_text()
+
+    assert "function renderMatchPlan" in javascript
+    assert "plan.tactics.length === 3" in javascript
+    assert "generated_game_plan" in javascript
+    assert 'id="prep-plan"' in html
+    assert ".plan-tactics" in stylesheet
+    assert ".plan-focus" in stylesheet

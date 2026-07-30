@@ -124,6 +124,25 @@ button:disabled { opacity: .55; cursor: wait; }
 .voice-card .voice-label { margin: 0; color: var(--text); font-size: 11px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
 .voice-card-coach .voice-label { color: var(--green); }
 .voice-card-psychologist .voice-label { color: var(--clay); }
+.match-plan { display: grid; gap: 12px; margin: 14px 0; }
+.plan-section { padding: 15px 16px; border: 1px solid var(--line); border-radius: 16px; background: rgba(4, 15, 11, .56); }
+.plan-section p { margin: 0; }
+.plan-label { color: var(--green); font-size: 11px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.plan-copy { margin-top: 7px !important; font-size: 15px; line-height: 1.48; }
+.plan-opponent { border-left: 3px solid var(--green); }
+.plan-tactics { border-color: rgba(199, 239, 91, .28); }
+.plan-tactics .plan-label { color: var(--lime); }
+.plan-tactics ol { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; counter-reset: tactic; }
+.plan-tactics li { position: relative; min-height: 28px; padding-left: 38px; font-size: 15px; line-height: 1.45; counter-increment: tactic; }
+.plan-tactics li::before { content: counter(tactic); position: absolute; left: 0; top: -2px; display: grid; place-items: center; width: 27px; height: 27px; color: #062015; background: var(--lime); border-radius: 9px; font-size: 12px; font-weight: 900; }
+.plan-support { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.plan-body { border-top: 3px solid var(--clay); }
+.plan-body .plan-label { color: var(--clay); }
+.plan-reset { border-top: 3px solid #7ca8ff; }
+.plan-reset .plan-label { color: #9bbcff; }
+.plan-focus { display: flex; align-items: center; gap: 10px; margin: 0; padding: 13px 15px; border-radius: 14px; color: #062015; background: var(--lime); }
+.plan-focus span { font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.plan-focus strong { font-size: 16px; }
 .review-panel { padding: 20px; margin-top: 18px; }
 .review-panel h3, .history-review h3 { margin: 7px 0 8px; font-size: 24px; }
 .review-panel > .primary-button { width: 100%; margin-top: 8px; }
@@ -221,6 +240,7 @@ button:disabled { opacity: .55; cursor: wait; }
   .choice-buttons { grid-template-columns: 1fr; }
   .choice-buttons button { min-height: 48px; }
   .voice-grid { grid-template-columns: 1fr; }
+  .plan-support { grid-template-columns: 1fr; }
   .match-list-item { align-items: start; }
   .match-result { align-items: flex-end; flex-direction: column; gap: 7px; }
   .history-detail-heading { align-items: flex-start; }

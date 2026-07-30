@@ -222,6 +222,10 @@ def create_prep():
 
     match = db.create_match({**match_data, "status": "preparing"})
     try:
+        game_plan = {
+            key: brief[key]
+            for key in ("opponent_cue", "tactics", "body", "reset", "focus")
+        }
         prep = db.save_prep({
             "match_id": match["id"],
             "oura_health_log_id": oura.get("health_log_id") if oura else None,
@@ -233,6 +237,7 @@ def create_prep():
             **survey,
             "generated_brief_technical": brief["technical"],
             "generated_brief_mental": brief["mental"],
+            "generated_game_plan": game_plan,
         })
     except Exception:
         db.cancel_match(match["id"])

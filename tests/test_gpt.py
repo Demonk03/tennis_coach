@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import gpt
@@ -13,7 +14,17 @@ def _mock_client(mocker, content: str):
 
 
 def test_prep_brief_sends_structured_context(mocker):
-    client = _mock_client(mocker, "Играй глубоко и сохраняй спокойный ритм.")
+    client = _mock_client(mocker, json.dumps({
+        "opponent_cue": "Соперник любит контратаковать.",
+        "tactics": [
+            "Играй глубоко с запасом над сеткой.",
+            "Не открывай угол без удобного мяча.",
+            "После удара возвращайся в нейтральную позицию.",
+        ],
+        "body": "Проведи полную разминку и начни без форсирования.",
+        "reset": "Отвернись от корта → длинный выдох → назови цель следующего мяча.",
+        "focus": "Глубина, ноги, следующий мяч",
+    }, ensure_ascii=False))
 
     result = gpt.generate_prep_brief(
         {"surface": "hard", "opponent_level": "equal"},
@@ -22,27 +33,44 @@ def test_prep_brief_sends_structured_context(mocker):
         [{"generated_technical_summary": "Не торопиться на приёме"}],
     )
 
-    assert "Играй глубоко" in result["technical"]
-    assert "Играй глубоко" in result["mental"]
-    assert client.chat.completions.create.call_count == 2
-    calls = client.chat.completions.create.call_args_list
-    assert calls[0].kwargs["messages"][0]["content"] == gpt.COACH_PROMPT
-    assert calls[1].kwargs["messages"][0]["content"] == gpt.PSYCHOLOGIST_PROMPT
-    assert '"readiness": 78' in calls[0].kwargs["messages"][1]["content"]
-    assert "Не торопиться на приёме" in calls[1].kwargs["messages"][1]["content"]
+    assert result["tactics"][0].startswith("Играй глубоко")
+    assert result["technical"].startswith("Соперник любит")
+    assert "Отвернись" in result["mental"]
+    assert client.chat.completions.create.call_count == 1
+    call = client.chat.completions.create.call_args
+    assert call.kwargs["messages"][0]["content"] == gpt.MATCH_PLAN_PROMPT
+    response_format = call.kwargs["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    assert response_format["json_schema"]["schema"]["properties"]["tactics"]["minItems"] == 3
+    assert response_format["json_schema"]["schema"]["properties"]["tactics"]["maxItems"] == 3
+    assert '"readiness": 78' in call.kwargs["messages"][1]["content"]
+    assert "Не торопиться на приёме" in call.kwargs["messages"][1]["content"]
 
 
-def test_prep_brief_failure_in_second_voice_fails_whole_operation(mocker):
-    complete = mocker.patch("gpt._complete", side_effect=["План тренера", RuntimeError("AI down")])
+def test_prep_brief_rejects_plan_without_three_tactics(mocker):
+    complete = mocker.patch("gpt._complete_json", return_value={
+        "opponent_cue": "Соперник играет быстро.",
+        "tactics": ["Играй глубоко."],
+        "body": "Разомнись.",
+        "reset": "Отвернись → выдохни → выбери цель.",
+        "focus": "Следующий мяч",
+    })
 
     try:
         gpt.generate_prep_brief({}, {}, None, [])
     except RuntimeError as error:
-        assert "AI down" in str(error)
+        assert "exactly three" in str(error)
     else:
         raise AssertionError("Expected RuntimeError")
 
-    assert complete.call_count == 2
+    assert complete.call_count == 1
+
+
+def test_prep_prompt_avoids_outcome_pressure_and_closed_eyes():
+    assert "настрой на победу" in gpt.MATCH_PLAN_PROMPT
+    assert "Не используй" in gpt.MATCH_PLAN_PROMPT
+    assert "не предлагай закрывать глаза" in gpt.MATCH_PLAN_PROMPT
 
 
 def test_post_match_review_uses_two_voices_and_allows_missing_prep(mocker):
