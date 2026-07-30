@@ -169,6 +169,15 @@ def _bundle_or_404(match_id: str) -> dict[str, Any]:
     return bundle
 
 
+def _is_unique_violation(error: Exception) -> bool:
+    if str(getattr(error, "code", "")) == "23505":
+        return True
+    for arg in getattr(error, "args", ()):
+        if isinstance(arg, dict) and str(arg.get("code", "")) == "23505":
+            return True
+    return '"code":"23505"' in str(error).replace(" ", "")
+
+
 @app.get("/api/health")
 def health():
     return jsonify({"status": "ok"})
@@ -204,8 +213,9 @@ def create_prep():
     }
     oura = _oura_snapshot() if payload.get("use_oura", True) else None
 
+    past_reviews = db.get_recent_reviews(limit=3)
     try:
-        brief = gpt.generate_prep_brief(match_data, survey, oura)
+        brief = gpt.generate_prep_brief(match_data, survey, oura, past_reviews)
     except Exception as error:
         logger.exception("Prep advice generation failed")
         raise APIError("Не удалось получить бриф. Попробуйте ещё раз", 503, "ai_unavailable") from error
@@ -221,7 +231,8 @@ def create_prep():
             "oura_sleep_score": oura.get("sleep_score") if oura else None,
             "oura_hrv": oura.get("average_hrv") if oura else None,
             **survey,
-            "generated_brief": brief,
+            "generated_brief_technical": brief["technical"],
+            "generated_brief_mental": brief["mental"],
         })
     except Exception:
         db.cancel_match(match["id"])
@@ -329,6 +340,47 @@ def finish_match(match_id: str):
     if not match:
         raise APIError("Матч не найден или уже завершён", 409, "invalid_match_state")
     return jsonify({"match": match})
+
+
+@app.post("/api/matches/<match_id>/review")
+@require_api_key
+def create_review(match_id: str):
+    bundle = _bundle_or_404(match_id)
+    if bundle["match"]["status"] not in {"completed", "cancelled"}:
+        raise APIError("Разбор доступен только после завершения матча", 409, "invalid_match_state")
+
+    payload = _json()
+    review_input = {
+        "physical_rating": _integer(payload, "physical_rating", 1, 5),
+        "mental_rating": _integer(payload, "mental_rating", 1, 5),
+        "technical_comment": _text(payload, "technical_comment", max_length=500),
+        "mental_comment": _text(payload, "mental_comment", max_length=500),
+    }
+    try:
+        summary = gpt.generate_post_match_review(
+            bundle["match"], bundle["prep"], review_input
+        )
+    except Exception as error:
+        logger.exception("Post-match review generation failed")
+        raise APIError(
+            "Не удалось получить разбор. Попробуйте ещё раз", 503, "ai_unavailable"
+        ) from error
+
+    try:
+        review = db.save_review({
+            "match_id": match_id,
+            **review_input,
+            "generated_technical_summary": summary["technical"],
+            "generated_mental_summary": summary["mental"],
+        })
+    except Exception as error:
+        if _is_unique_violation(error):
+            raise APIError(
+                "Этот матч уже разобран", 409, "review_already_exists"
+            ) from error
+        raise
+
+    return jsonify({"review": review, "summary": summary}), 201
 
 
 @app.delete("/api/matches/<match_id>")

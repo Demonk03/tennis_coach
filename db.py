@@ -60,6 +60,11 @@ def save_prep(payload: dict[str, Any]) -> dict[str, Any]:
     return response.data[0]
 
 
+def save_review(payload: dict[str, Any]) -> dict[str, Any]:
+    response = get_client().table("match_reviews").insert(payload).execute()
+    return response.data[0]
+
+
 def get_match(match_id: str) -> dict[str, Any] | None:
     response = get_client().table("matches").select("*").eq("id", match_id).limit(1).execute()
     return response.data[0] if response.data else None
@@ -84,6 +89,28 @@ def get_events_for_match(match_id: str) -> list[dict[str, Any]]:
     return response.data
 
 
+def get_review_for_match(match_id: str) -> dict[str, Any] | None:
+    response = (
+        get_client().table("match_reviews").select("*").eq("match_id", match_id).limit(1).execute()
+    )
+    return response.data[0] if response.data else None
+
+
+def get_recent_reviews(limit: int = 3) -> list[dict[str, Any]]:
+    response = (
+        get_client()
+        .table("match_reviews")
+        .select(
+            "match_id,physical_rating,mental_rating,technical_comment,mental_comment,"
+            "generated_technical_summary,generated_mental_summary,created_at"
+        )
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return response.data
+
+
 def get_match_bundle(match_id: str) -> dict[str, Any] | None:
     match = get_match(match_id)
     if not match:
@@ -92,6 +119,7 @@ def get_match_bundle(match_id: str) -> dict[str, Any] | None:
         "match": match,
         "prep": get_prep_for_match(match_id),
         "events": get_events_for_match(match_id),
+        "review": get_review_for_match(match_id),
     }
 
 
