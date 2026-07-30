@@ -513,8 +513,107 @@ function matchTitle(match) {
   return match.opponent_name || match.opponent_level || "Матч";
 }
 
+function parseFinalScore(score) {
+  const sets = String(score || "")
+    .trim()
+    .split(/\s+/)
+    .map((token) => {
+      const match = token.match(/^(\d+)\s*[-–—:]\s*(\d+)(\(\d+\))?[,;]?$/);
+      if (!match) return null;
+      return {
+        self: Number(match[1]),
+        opponent: Number(match[2]),
+        tiebreak: match[3] || "",
+      };
+    })
+    .filter(Boolean);
+
+  const selfSets = sets.filter((set) => set.self > set.opponent).length;
+  const opponentSets = sets.filter((set) => set.opponent > set.self).length;
+  let outcome = null;
+  if (selfSets > opponentSets) outcome = "win";
+  if (opponentSets > selfSets) outcome = "loss";
+  return { sets, outcome };
+}
+
+function matchOutcome(match) {
+  if (match.status !== "completed" || !match.final_score) return null;
+  return parseFinalScore(match.final_score).outcome;
+}
+
+function outcomeBadge(outcome, fallback = "") {
+  const badge = document.createElement("span");
+  badge.className = `outcome-badge ${outcome ? `outcome-${outcome}` : "outcome-neutral"}`;
+  if (outcome === "win") {
+    badge.textContent = "W";
+    badge.setAttribute("aria-label", "Победа");
+    badge.title = "Победа";
+  } else if (outcome === "loss") {
+    badge.textContent = "L";
+    badge.setAttribute("aria-label", "Поражение");
+    badge.title = "Поражение";
+  } else {
+    badge.textContent = fallback;
+  }
+  return badge;
+}
+
+function scoreLine(score) {
+  const container = document.createElement("span");
+  container.className = "scoreline";
+  container.setAttribute("aria-label", `Счёт ${score}`);
+  const parsed = parseFinalScore(score);
+
+  if (!parsed.sets.length) {
+    container.textContent = score;
+    return container;
+  }
+
+  parsed.sets.forEach((set, index) => {
+    if (index) container.append(document.createTextNode(" "));
+    const setScore = document.createElement("span");
+    setScore.className = "set-score";
+    const self = document.createElement(set.self > set.opponent ? "strong" : "span");
+    self.textContent = set.self;
+    const separator = document.createElement("span");
+    separator.className = "score-separator";
+    separator.textContent = "–";
+    const opponent = document.createElement(set.opponent > set.self ? "strong" : "span");
+    opponent.textContent = set.opponent;
+    setScore.append(self, separator, opponent);
+    if (set.tiebreak) {
+      const tiebreak = document.createElement("small");
+      tiebreak.className = "set-tiebreak";
+      tiebreak.textContent = set.tiebreak;
+      setScore.append(tiebreak);
+    }
+    container.append(setScore);
+  });
+  return container;
+}
+
+function matchResult(match) {
+  const result = document.createElement("span");
+  result.className = "match-result";
+  const outcome = matchOutcome(match);
+  if (match.final_score) {
+    result.append(outcomeBadge(outcome, "—"), scoreLine(match.final_score));
+  } else if (match.status === "in_progress") {
+    result.append(outcomeBadge(null, "LIVE"));
+    const score = displayScore(match.current_score);
+    const current = document.createElement("span");
+    current.className = "scoreline";
+    current.textContent = score;
+    result.append(current);
+  } else {
+    result.append(outcomeBadge(null, "ПЛАН"));
+  }
+  return result;
+}
+
 async function loadHistory() {
   const list = $("#matches-list");
+  $("#match-detail").hidden = true;
   list.replaceChildren();
   const loading = document.createElement("p");
   loading.className = "muted";
@@ -531,16 +630,16 @@ async function loadHistory() {
     }
     result.matches.forEach((match) => {
       const button = document.createElement("button");
-      button.className = "match-list-item";
+      const outcome = matchOutcome(match);
+      button.className = `match-list-item ${outcome ? `result-${outcome}` : "result-neutral"}`;
       const main = document.createElement("span");
+      main.className = "match-list-main";
       const title = document.createElement("strong");
       title.textContent = matchTitle(match);
       const meta = document.createElement("small");
       meta.textContent = `${formatDate(match.match_date)} · ${match.surface}`;
       main.append(title, document.createElement("br"), meta);
-      const score = document.createElement("span");
-      score.textContent = match.final_score || (match.status === "in_progress" ? displayScore(match.current_score) : "Бриф");
-      button.append(main, score);
+      button.append(main, matchResult(match));
       button.addEventListener("click", () => loadMatchDetail(match.id));
       list.append(button);
     });
@@ -557,8 +656,13 @@ async function loadMatchDetail(matchId) {
   try {
     const bundle = await apiFetch(`/api/matches/${matchId}`);
     detail.replaceChildren();
-    const heading = document.createElement("h3");
-    heading.textContent = `${matchTitle(bundle.match)} · ${bundle.match.final_score || displayScore(bundle.match.current_score)}`;
+    const outcome = matchOutcome(bundle.match);
+    detail.className = `history-detail ${outcome ? `result-${outcome}` : "result-neutral"}`;
+    const heading = document.createElement("div");
+    heading.className = "history-detail-heading";
+    const headingTitle = document.createElement("h3");
+    headingTitle.textContent = matchTitle(bundle.match);
+    heading.append(headingTitle, matchResult(bundle.match));
     const briefLabel = document.createElement("p");
     briefLabel.className = "eyebrow";
     briefLabel.textContent = "БРИФ";
