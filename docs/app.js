@@ -70,6 +70,107 @@ function setBusy(button, busy, busyText = "Подождите…") {
   button.textContent = busy ? busyText : button.dataset.label;
 }
 
+function voiceCard(label, text, kind) {
+  const card = document.createElement("article");
+  card.className = `voice-card voice-card-${kind}`;
+  const title = document.createElement("p");
+  title.className = "voice-label";
+  title.textContent = label;
+  const body = document.createElement("p");
+  body.textContent = text;
+  card.append(title, body);
+  return card;
+}
+
+function renderVoices(container, technical, mental) {
+  const cards = [];
+  if (technical) cards.push(voiceCard("Тренер", technical, "coach"));
+  if (mental) cards.push(voiceCard("Психолог", mental, "psychologist"));
+  container.replaceChildren(...cards);
+}
+
+function renderReviewSummary(container, summary, showHistoryButton = false) {
+  container.hidden = false;
+  container.replaceChildren();
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "ВЫВОДЫ НА БУДУЩЕЕ";
+  const title = document.createElement("h3");
+  title.textContent = "Разбор матча";
+  const voices = document.createElement("div");
+  voices.className = "voice-grid";
+  renderVoices(voices, summary.technical, summary.mental);
+  container.append(eyebrow, title, voices);
+
+  if (showHistoryButton) {
+    const historyButton = document.createElement("button");
+    historyButton.type = "button";
+    historyButton.className = "primary-button";
+    historyButton.textContent = "В историю";
+    historyButton.addEventListener("click", () => {
+      container.hidden = true;
+      renderActiveBundle(null);
+      showScreen("history");
+    });
+    container.append(historyButton);
+  }
+}
+
+function renderReviewForm(container, matchId, showHistoryButton = false) {
+  container.hidden = false;
+  container.innerHTML = `
+    <p class="eyebrow">ПОСЛЕ МАТЧА</p>
+    <h3>Что забираем с собой?</h3>
+    <p class="muted">Отдельно посмотрим на игру и на то, что происходило внутри.</p>
+    <form class="stack-form review-form">
+      <fieldset>
+        <legend>Тренер</legend>
+        <label>Физическое состояние <output data-rating-output="physical">3 / 5</output>
+          <input name="physical_rating" data-rating="physical" type="range" min="1" max="5" value="3">
+        </label>
+        <label>Техника, физика и тактика
+          <textarea name="technical_comment" maxlength="500" required placeholder="Что работало, что не получалось, где не хватило сил?"></textarea>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Психолог</legend>
+        <label>Устойчивость и фокус <output data-rating-output="mental">3 / 5</output>
+          <input name="mental_rating" data-rating="mental" type="range" min="1" max="5" value="3">
+        </label>
+        <label>Эмоции и концентрация
+          <textarea name="mental_comment" maxlength="500" required placeholder="Что происходило после ошибок и сложных эпизодов?"></textarea>
+        </label>
+      </fieldset>
+      <button class="primary-button" type="submit">Получить разбор</button>
+    </form>`;
+
+  container.querySelectorAll("[data-rating]").forEach((input) => {
+    input.addEventListener("input", () => {
+      container.querySelector(`[data-rating-output="${input.dataset.rating}"]`).textContent = `${input.value} / 5`;
+    });
+  });
+  container.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector("button");
+    const formData = new FormData(event.currentTarget);
+    const payload = Object.fromEntries(formData.entries());
+    payload.physical_rating = Number(payload.physical_rating);
+    payload.mental_rating = Number(payload.mental_rating);
+    setBusy(button, true, "Разбираю…");
+    try {
+      const result = await apiFetch(`/api/matches/${matchId}/review`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      renderReviewSummary(container, result.summary, showHistoryButton);
+      container.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      showToast(error.message);
+      setBusy(button, false);
+    }
+  });
+}
+
 function showScreen(name) {
   $$(".screen").forEach((screen) => { screen.hidden = screen.id !== `screen-${name}`; });
   $$(".bottom-nav button").forEach((button) => button.classList.toggle("active", button.dataset.screen === name));
@@ -158,6 +259,8 @@ function renderActiveBundle(bundle) {
   $("#active-match").hidden = !hasActive;
   if (!hasActive) return;
 
+  $("#post-match-review").hidden = true;
+
   const match = bundle.match;
   $("#match-opponent").textContent = match.opponent_name
     ? `Матч с ${match.opponent_name}`
@@ -169,7 +272,11 @@ function renderActiveBundle(bundle) {
 
   $("#prep-form").hidden = true;
   $("#prep-result").hidden = false;
-  $("#prep-brief").textContent = bundle.prep?.generated_brief || "Бриф готов.";
+  renderVoices(
+    $("#prep-voices"),
+    bundle.prep?.generated_brief_technical || "Бриф готов.",
+    bundle.prep?.generated_brief_mental || "",
+  );
   $("#start-match").textContent = started ? "Вернуться в матч" : "Начать матч";
   $("#start-match").dataset.label = $("#start-match").textContent;
 
@@ -205,7 +312,7 @@ async function submitPrep(event) {
       body: JSON.stringify(payload),
     });
     state.activeBundle = { match: result.match, prep: result.prep, events: [] };
-    $("#prep-brief").textContent = result.brief;
+    renderVoices($("#prep-voices"), result.brief.technical, result.brief.mental);
     $("#prep-result").hidden = false;
     $("#prep-result").scrollIntoView({ behavior: "smooth", block: "center" });
     renderActiveBundle(state.activeBundle);
@@ -367,16 +474,18 @@ async function finishMatch(event) {
   setBusy(button, true, "Сохраняю…");
   const finalScore = new FormData(event.currentTarget).get("final_score");
   try {
-    await apiFetch(`/api/matches/${state.activeBundle.match.id}/finish`, {
+    const result = await apiFetch(`/api/matches/${state.activeBundle.match.id}/finish`, {
       method: "POST",
       body: JSON.stringify({ final_score: finalScore }),
     });
     state.activeBundle = null;
-    renderActiveBundle(null);
+    $("#active-match").hidden = true;
+    $("#no-active-match").hidden = true;
     $("#prep-form").hidden = false;
     $("#prep-result").hidden = true;
-    showToast("Матч сохранён в истории");
-    showScreen("history");
+    renderReviewForm($("#post-match-review"), result.match.id, true);
+    $("#post-match-review").scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("Матч сохранён. Теперь короткий разбор");
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -453,8 +562,20 @@ async function loadMatchDetail(matchId) {
     const briefLabel = document.createElement("p");
     briefLabel.className = "eyebrow";
     briefLabel.textContent = "БРИФ";
-    const brief = document.createElement("p");
-    brief.textContent = bundle.prep?.generated_brief || "Без подготовительного брифа";
+    const brief = document.createElement("div");
+    brief.className = "voice-grid compact";
+    if (bundle.prep) {
+      renderVoices(
+        brief,
+        bundle.prep.generated_brief_technical,
+        bundle.prep.generated_brief_mental,
+      );
+    } else {
+      const missingBrief = document.createElement("p");
+      missingBrief.className = "muted";
+      missingBrief.textContent = "Без подготовительного брифа";
+      brief.append(missingBrief);
+    }
     const timeline = document.createElement("div");
     timeline.className = "timeline";
     bundle.events.forEach((event) => {
@@ -466,7 +587,25 @@ async function loadMatchDetail(matchId) {
       item.append(title, advice);
       timeline.append(item);
     });
-    detail.append(heading, briefLabel, brief, timeline);
+    const reviewSection = document.createElement("section");
+    reviewSection.className = "history-review";
+    if (bundle.review) {
+      renderReviewSummary(reviewSection, {
+        technical: bundle.review.generated_technical_summary,
+        mental: bundle.review.generated_mental_summary,
+      });
+    } else if (bundle.match.status === "completed") {
+      const reviewButton = document.createElement("button");
+      reviewButton.type = "button";
+      reviewButton.className = "secondary-button";
+      reviewButton.textContent = "Разобрать матч";
+      reviewButton.addEventListener("click", () => {
+        renderReviewForm(reviewSection, bundle.match.id);
+        reviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      reviewSection.append(reviewButton);
+    }
+    detail.append(heading, briefLabel, brief, timeline, reviewSection);
     detail.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     detail.hidden = true;

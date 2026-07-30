@@ -38,8 +38,18 @@ def valid_prep_payload():
 def active_bundle(status="in_progress"):
     return {
         "match": {"id": "match-1", "status": status, "current_score": {"sets": "", "game": "0-0", "serving": "unknown"}},
-        "prep": {"generated_brief": "Бриф"},
+        "prep": {"generated_brief_technical": "Бриф", "generated_brief_mental": "Фокус"},
         "events": [],
+        "review": None,
+    }
+
+
+def valid_review_payload():
+    return {
+        "physical_rating": 4,
+        "mental_rating": 2,
+        "technical_comment": "Подача не шла весь матч",
+        "mental_comment": "После ошибок терял концентрацию",
     }
 
 
@@ -75,16 +85,31 @@ def test_create_prep_generates_before_creating_match(client, mocker):
         "id": "log-1", "date": date.today().isoformat(), "readiness_score": 82,
         "sleep_score": 79, "average_hrv": 48.0,
     })
-    generate = mocker.patch("app.gpt.generate_prep_brief", return_value="Глубоко играй под бэкхэнд.")
+    reviews = [{"generated_technical_summary": "Спокойнее на приёме"}]
+    recent = mocker.patch("app.db.get_recent_reviews", return_value=reviews)
+    generate = mocker.patch("app.gpt.generate_prep_brief", return_value={
+        "technical": "Глубоко играй под бэкхэнд.",
+        "mental": "Возвращай внимание к следующему мячу.",
+    })
     create = mocker.patch("app.db.create_match", return_value={"id": "match-1", "status": "preparing"})
-    mocker.patch("app.db.save_prep", return_value={"id": "prep-1", "generated_brief": "Глубоко играй под бэкхэнд."})
+    save = mocker.patch("app.db.save_prep", return_value={
+        "id": "prep-1",
+        "generated_brief_technical": "Глубоко играй под бэкхэнд.",
+        "generated_brief_mental": "Возвращай внимание к следующему мячу.",
+    })
 
     response = client.post("/api/matches/prep", headers=AUTH, json=valid_prep_payload())
 
     assert response.status_code == 201
     assert response.get_json()["match"]["id"] == "match-1"
+    assert response.get_json()["brief"]["mental"].startswith("Возвращай")
     assert generate.call_count == 1
+    assert generate.call_args.args[3] == reviews
+    recent.assert_called_once_with(limit=3)
     assert create.call_count == 1
+    saved = save.call_args.args[0]
+    assert saved["generated_brief_technical"].startswith("Глубоко")
+    assert saved["generated_brief_mental"].startswith("Возвращай")
 
 
 def test_active_match_prevents_second_prep_and_ai_cost(client, mocker):
@@ -164,7 +189,7 @@ def test_changeover_event_receives_full_match_context(client, mocker):
 
     assert response.status_code == 201
     context = generate.call_args.args[0]
-    assert context["prep"]["generated_brief"] == "Бриф"
+    assert context["prep"]["generated_brief_technical"] == "Бриф"
     assert context["previous_events"][0]["id"] == "older-event"
     update_score.assert_called_once()
 
@@ -191,3 +216,101 @@ def test_cors_echoes_only_allowed_origin(client, monkeypatch):
 def test_unknown_route_stays_404(client):
     response = client.get("/not-a-route")
     assert response.status_code == 404
+
+
+def test_review_returns_404_for_missing_match(client, mocker):
+    mocker.patch("app.db.get_match_bundle", return_value=None)
+
+    response = client.post(
+        "/api/matches/missing/review", headers=AUTH, json=valid_review_payload()
+    )
+
+    assert response.status_code == 404
+    assert response.get_json()["error"]["code"] == "not_found"
+
+
+def test_review_rejects_non_terminal_match_without_ai_cost(client, mocker):
+    mocker.patch("app.db.get_match_bundle", return_value=active_bundle("in_progress"))
+    generate = mocker.patch("app.gpt.generate_post_match_review")
+
+    response = client.post(
+        "/api/matches/match-1/review", headers=AUTH, json=valid_review_payload()
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "invalid_match_state"
+    generate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("physical_rating", 0),
+        ("mental_rating", 6),
+        ("physical_rating", True),
+        ("technical_comment", "x" * 501),
+        ("mental_comment", ""),
+    ],
+)
+def test_review_validates_input(client, mocker, field, value):
+    mocker.patch("app.db.get_match_bundle", return_value=active_bundle("completed"))
+    payload = valid_review_payload()
+    payload[field] = value
+
+    response = client.post("/api/matches/match-1/review", headers=AUTH, json=payload)
+
+    assert response.status_code == 400
+
+
+def test_review_saves_both_summaries_with_missing_prep(client, mocker):
+    bundle = active_bundle("completed")
+    bundle["prep"] = None
+    mocker.patch("app.db.get_match_bundle", return_value=bundle)
+    generate = mocker.patch("app.gpt.generate_post_match_review", return_value={
+        "technical": "На следующем матче упростить первый мяч.",
+        "mental": "После ошибки назвать следующий конкретный фокус.",
+    })
+    save = mocker.patch("app.db.save_review", return_value={"id": "review-1", "match_id": "match-1"})
+
+    response = client.post(
+        "/api/matches/match-1/review", headers=AUTH, json=valid_review_payload()
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["summary"]["technical"].startswith("На следующем")
+    assert generate.call_args.args[1] is None
+    saved = save.call_args.args[0]
+    assert saved["generated_technical_summary"].startswith("На следующем")
+    assert saved["generated_mental_summary"].startswith("После ошибки")
+
+
+def test_duplicate_review_maps_database_constraint_to_conflict(client, mocker):
+    mocker.patch("app.db.get_match_bundle", return_value=active_bundle("completed"))
+    mocker.patch("app.gpt.generate_post_match_review", return_value={
+        "technical": "Вывод тренера",
+        "mental": "Вывод психолога",
+    })
+    duplicate = Exception("duplicate key")
+    duplicate.code = "23505"
+    mocker.patch("app.db.save_review", side_effect=duplicate)
+
+    response = client.post(
+        "/api/matches/match-1/review", headers=AUTH, json=valid_review_payload()
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "review_already_exists"
+
+
+def test_review_ai_failure_does_not_save_partial_result(client, mocker):
+    mocker.patch("app.db.get_match_bundle", return_value=active_bundle("completed"))
+    mocker.patch("app.gpt.generate_post_match_review", side_effect=RuntimeError("AI down"))
+    save = mocker.patch("app.db.save_review")
+
+    response = client.post(
+        "/api/matches/match-1/review", headers=AUTH, json=valid_review_payload()
+    )
+
+    assert response.status_code == 503
+    assert response.get_json()["error"]["code"] == "ai_unavailable"
+    save.assert_not_called()

@@ -39,7 +39,8 @@ create table if not exists match_prep (
   last_meal text,
   physical_state text not null,
   mindset text not null,
-  generated_brief text not null,
+  generated_brief_technical text not null,
+  generated_brief_mental text not null,
   created_at timestamptz not null default now()
 );
 
@@ -57,9 +58,23 @@ create table if not exists match_events (
   created_at timestamptz not null default now()
 );
 
+create table if not exists match_reviews (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null unique references matches(id) on delete cascade,
+  physical_rating integer not null check (physical_rating between 1 and 5),
+  mental_rating integer not null check (mental_rating between 1 and 5),
+  technical_comment text not null,
+  mental_comment text not null,
+  generated_technical_summary text not null,
+  generated_mental_summary text not null,
+  created_at timestamptz not null default now()
+);
+
 create index if not exists matches_created_at_idx on matches(created_at desc);
 create index if not exists match_events_match_id_created_at_idx
   on match_events(match_id, created_at);
+create index if not exists match_reviews_created_at_idx
+  on match_reviews(created_at desc);
 
 create or replace function set_updated_at()
 returns trigger
@@ -79,6 +94,7 @@ for each row execute function set_updated_at();
 alter table matches enable row level security;
 alter table match_prep enable row level security;
 alter table match_events enable row level security;
+alter table match_reviews enable row level security;
 
 -- Frontend никогда не обращается к Supabase напрямую. Backend использует service-role key,
 -- поэтому отдельные RLS policies для anon/authenticated намеренно не создаются.
