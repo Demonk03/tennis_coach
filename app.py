@@ -21,6 +21,14 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
 TOPICS = {"forehand", "backhand", "serve", "return", "movement", "net"}
+OPPONENT_STYLE_CHIPS = {
+    "Силовая игра с задней линии",
+    "Укороты и игра у сетки",
+    "Защита, много подбирает",
+    "Тяжёлый топспин",
+    "Плоский быстрый удар",
+    "Много слайсов",
+}
 MATCH_TYPES = {"singles", "doubles"}
 SURFACES = {"hard", "clay", "grass", "carpet", "other"}
 SESSION_FORMATS = {"tournament", "1h_session", "2h_session", "friendly"}
@@ -205,6 +213,7 @@ def save_profile():
         "playing_style": _text(payload, "playing_style", required=False, max_length=500),
         "strengths": _text(payload, "strengths", required=False, max_length=500),
         "medical_context": _text(payload, "medical_context", required=False, max_length=1000),
+        "mental_pattern": _text(payload, "mental_pattern", required=False, max_length=500),
     }
     return jsonify({"profile": db.save_player_profile(profile)})
 
@@ -293,6 +302,17 @@ def update_score(match_id: str):
     match = db.update_score(match_id, score)
     if not match:
         raise APIError("Счёт можно менять только в активном матче", 409, "invalid_match_state")
+    return jsonify({"match": match})
+
+
+@app.patch("/api/matches/<match_id>/opponent-style")
+@require_api_key
+def update_opponent_style(match_id: str):
+    payload = _json()
+    opponent_style = _choice(payload, "opponent_style", OPPONENT_STYLE_CHIPS)
+    match = db.update_opponent_style(match_id, opponent_style)
+    if not match:
+        raise APIError("Стиль соперника можно уточнить только в активном матче", 409, "invalid_match_state")
     return jsonify({"match": match})
 
 

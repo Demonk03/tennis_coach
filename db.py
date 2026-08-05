@@ -171,6 +171,19 @@ def update_score(match_id: str, score: dict[str, str]) -> dict[str, Any] | None:
     return response.data[0] if response.data else None
 
 
+def update_opponent_style(match_id: str, opponent_style: str) -> dict[str, Any] | None:
+    response = (
+        get_client()
+        .table("matches")
+        .update({"opponent_style": opponent_style})
+        .eq("id", match_id)
+        .eq("status", "in_progress")
+        .select("*")
+        .execute()
+    )
+    return response.data[0] if response.data else None
+
+
 def finish_match(match_id: str, final_score: str) -> dict[str, Any] | None:
     completed_at = datetime.now(timezone.utc).isoformat()
     response = (
