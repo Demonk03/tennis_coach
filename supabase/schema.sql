@@ -7,6 +7,7 @@ create table if not exists player_profile (
   playing_style text not null default '',
   strengths text not null default '',
   medical_context text not null default '',
+  mental_pattern text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

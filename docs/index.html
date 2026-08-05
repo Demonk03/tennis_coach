@@ -179,9 +179,22 @@
         <details class="match-controls">
           <summary>Завершение матча</summary>
           <form id="finish-form">
-            <label>Итоговый счёт · сначала мой
-              <input name="final_score" required maxlength="120" placeholder="6-4 3-6 10-7">
-            </label>
+            <section class="set-score-picker" aria-labelledby="finish-score-picker-title">
+              <div class="set-score-picker-heading">
+                <div>
+                  <p id="finish-score-picker-title" class="score-field-label">Итоговый счёт по сетам</p>
+                  <p class="score-picker-hint">Крутите цифры вверх или вниз · сначала мой счёт</p>
+                </div>
+                <div class="score-side-labels" aria-hidden="true">
+                  <span>Я</span><span>Соперник</span>
+                </div>
+              </div>
+              <div id="finish-set-score-rows" class="set-score-rows"></div>
+              <div class="set-score-actions">
+                <button id="finish-add-set-button" class="set-score-action" type="button">＋ Добавить сет</button>
+                <button id="finish-remove-set-button" class="set-score-action set-score-action-muted" type="button">Убрать последний</button>
+              </div>
+            </section>
             <button class="primary-button" type="submit">Завершить матч</button>
           </form>
           <button id="cancel-match" class="danger-button" type="button">Отменить этот матч</button>
@@ -224,6 +237,14 @@
           <label>Сильные стороны
             <textarea name="strengths" maxlength="500" placeholder="Удары, движение, тактические и ментальные качества"></textarea>
           </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Психологический паттерн</legend>
+          <label>Типичная реакция под давлением
+            <textarea name="mental_pattern" maxlength="500" placeholder="Например, зажимаюсь на брейк-поинтах, теряю фокус после своей ошибки на подаче"></textarea>
+          </label>
+          <p class="form-note">Это устойчивая особенность, а не сегодняшнее настроение — она всегда учитывается психологом, отдельно от того, как ты себя чувствуешь перед конкретным матчем.</p>
         </fieldset>
 
         <fieldset>

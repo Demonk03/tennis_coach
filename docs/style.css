@@ -92,6 +92,8 @@ input, select, textarea {
   border: 1px solid rgba(222,244,231,.18);
   border-radius: 12px;
   outline: none;
+  /* iOS Safari auto-zooms the page on focus if the field's font-size is under 16px */
+  font-size: 16px;
 }
 textarea { min-height: 82px; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(50,213,131,.12); }
@@ -217,6 +219,7 @@ button:disabled { opacity: .55; cursor: wait; }
 .choice-good { background: rgba(50,213,131,.24); }
 .choice-bad { background: rgba(255,122,122,.2); }
 .choice-skip { background: rgba(255,255,255,.08); }
+.choice-chip { background: rgba(163,224,58,.14); font-size: 13px; line-height: 1.25; padding: 6px; }
 .feeling-form { display: grid; gap: 14px; }
 
 .match-controls { margin-top: 28px; padding: 16px; box-shadow: none; }

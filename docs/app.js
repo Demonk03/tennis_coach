@@ -7,6 +7,15 @@ const TOPICS = [
   { key: "net", label: "Игра у сетки" },
 ];
 
+const OPPONENT_STYLE_CHIPS = [
+  "Силовая игра с задней линии",
+  "Укороты и игра у сетки",
+  "Защита, много подбирает",
+  "Тяжёлый топспин",
+  "Плоский быстрый удар",
+  "Много слайсов",
+];
+
 const SCORE_WHEEL_ITEM_HEIGHT = 44;
 const MAX_MATCH_SETS = 5;
 const DEFAULT_MAX_GAMES = 12;
@@ -274,21 +283,6 @@ function parseSetScores(value) {
   return scores.length ? scores : [{ self: 0, opponent: 0 }];
 }
 
-function serializeSetScores() {
-  const rows = $$(".set-score-row").map((row) => ({
-    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
-    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
-  }));
-  const hasPlayedGames = rows.some((set) => set.self > 0 || set.opponent > 0);
-  if (!hasPlayedGames && rows.length === 1) return "";
-  return rows.map((set) => `${set.self}-${set.opponent}`).join(" ");
-}
-
-function updateScoreFromWheels() {
-  $("#score-sets").value = serializeSetScores();
-  $("#score-display").textContent = displayScore(currentScore());
-}
-
 function markWheelValue(wheel, value) {
   const max = Number(wheel.dataset.max);
   const nextValue = Math.max(0, Math.min(max, Number(value) || 0));
@@ -306,7 +300,7 @@ function selectWheelValue(wheel, value, behavior = "auto") {
   wheel.scrollTo({ top: nextValue * SCORE_WHEEL_ITEM_HEIGHT, behavior });
 }
 
-function createScoreWheel(side, value) {
+function createScoreWheel(side, value, onChange) {
   const wheel = document.createElement("div");
   const max = Math.max(DEFAULT_MAX_GAMES, Number(value) || 0);
   wheel.className = "score-wheel";
@@ -330,7 +324,7 @@ function createScoreWheel(side, value) {
     option.textContent = game;
     option.addEventListener("click", () => {
       selectWheelValue(wheel, game, "smooth");
-      updateScoreFromWheels();
+      onChange();
     });
     wheel.append(option);
   }
@@ -345,7 +339,7 @@ function createScoreWheel(side, value) {
     if (scrollFrame) cancelAnimationFrame(scrollFrame);
     scrollFrame = requestAnimationFrame(() => {
       markWheelValue(wheel, Math.round(wheel.scrollTop / SCORE_WHEEL_ITEM_HEIGHT));
-      updateScoreFromWheels();
+      onChange();
     });
   }, { passive: true });
   wheel.addEventListener("keydown", (event) => {
@@ -357,72 +351,112 @@ function createScoreWheel(side, value) {
     if (event.key === "Home") nextValue = 0;
     if (event.key === "End") nextValue = max;
     selectWheelValue(wheel, nextValue, "smooth");
-    updateScoreFromWheels();
+    onChange();
   });
 
   requestAnimationFrame(() => selectWheelValue(wheel, value));
   return wheel;
 }
 
-function renderSetScoreRows(scores) {
-  const container = $("#set-score-rows");
-  const rows = scores.slice(0, MAX_MATCH_SETS).map((set, index) => {
-    const row = document.createElement("div");
-    row.className = "set-score-row";
-    row.dataset.set = String(index + 1);
+// Backs both the live match score picker and the finish-match score picker:
+// each instance owns its own DOM rows, so the two never read each other's wheels.
+function createSetScorePicker({ rowsId, addId, removeId, onChange }) {
+  const rowsEl = $(rowsId);
+  const addButton = $(addId);
+  const removeButton = $(removeId);
 
-    const title = document.createElement("span");
-    title.className = "set-score-row-title";
-    title.textContent = `${index + 1} сет`;
+  function currentRows() {
+    return $$(`${rowsId} .set-score-row`).map((row) => ({
+      self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
+      opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
+    }));
+  }
 
-    const divider = document.createElement("span");
-    divider.className = "set-score-divider";
-    divider.setAttribute("aria-hidden", "true");
-    divider.textContent = ":";
+  function serialize() {
+    const rows = currentRows();
+    const hasPlayedGames = rows.some((set) => set.self > 0 || set.opponent > 0);
+    if (!hasPlayedGames && rows.length === 1) return "";
+    return rows.map((set) => `${set.self}-${set.opponent}`).join(" ");
+  }
 
-    row.append(
-      title,
-      createScoreWheel("self", set.self),
-      divider,
-      createScoreWheel("opponent", set.opponent),
-    );
-    return row;
-  });
-  container.replaceChildren(...rows);
-  $("#add-set-button").disabled = rows.length >= MAX_MATCH_SETS;
-  $("#remove-set-button").disabled = rows.length <= 1;
-  updateScoreFromWheels();
+  function notify() {
+    if (onChange) onChange(serialize());
+  }
+
+  function render(scores) {
+    const rows = scores.slice(0, MAX_MATCH_SETS).map((set, index) => {
+      const row = document.createElement("div");
+      row.className = "set-score-row";
+      row.dataset.set = String(index + 1);
+
+      const title = document.createElement("span");
+      title.className = "set-score-row-title";
+      title.textContent = `${index + 1} сет`;
+
+      const divider = document.createElement("span");
+      divider.className = "set-score-divider";
+      divider.setAttribute("aria-hidden", "true");
+      divider.textContent = ":";
+
+      row.append(
+        title,
+        createScoreWheel("self", set.self, notify),
+        divider,
+        createScoreWheel("opponent", set.opponent, notify),
+      );
+      return row;
+    });
+    rowsEl.replaceChildren(...rows);
+    addButton.disabled = rows.length >= MAX_MATCH_SETS;
+    removeButton.disabled = rows.length <= 1;
+    notify();
+  }
+
+  function addSet() {
+    const rows = currentRows();
+    if (rows.length >= MAX_MATCH_SETS) return;
+    render([...rows, { self: 0, opponent: 0 }]);
+    rowsEl.lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function removeSet() {
+    const rows = currentRows();
+    if (rows.length <= 1) return;
+    render(rows.slice(0, -1));
+  }
+
+  addButton.addEventListener("click", addSet);
+  removeButton.addEventListener("click", removeSet);
+
+  return { render, serialize };
 }
 
-function addSetScoreRow() {
-  const scores = $$(".set-score-row").map((row) => ({
-    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
-    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
-  }));
-  if (scores.length >= MAX_MATCH_SETS) return;
-  renderSetScoreRows([...scores, { self: 0, opponent: 0 }]);
-  $("#set-score-rows").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
+const mainScorePicker = createSetScorePicker({
+  rowsId: "#set-score-rows",
+  addId: "#add-set-button",
+  removeId: "#remove-set-button",
+  onChange: (sets) => {
+    $("#score-sets").value = sets;
+    $("#score-display").textContent = displayScore(currentScore());
+  },
+});
 
-function removeSetScoreRow() {
-  const scores = $$(".set-score-row").map((row) => ({
-    self: Number(row.querySelector('[data-side="self"]').dataset.value || 0),
-    opponent: Number(row.querySelector('[data-side="opponent"]').dataset.value || 0),
-  }));
-  if (scores.length <= 1) return;
-  renderSetScoreRows(scores.slice(0, -1));
-}
+const finishScorePicker = createSetScorePicker({
+  rowsId: "#finish-set-score-rows",
+  addId: "#finish-add-set-button",
+  removeId: "#finish-remove-set-button",
+});
 
 function currentScore() {
   return {
-    sets: serializeSetScores(),
+    sets: mainScorePicker.serialize(),
     game: $("#score-game").value,
     serving: $("#score-serving").value,
   };
 }
 
 function setScoreFields(score = {}) {
-  renderSetScoreRows(parseSetScores(score.sets));
+  mainScorePicker.render(parseSetScores(score.sets));
   $("#score-game").value = score.game || "0-0";
   $("#score-serving").value = score.serving || "unknown";
   $("#score-display").textContent = displayScore(score);
@@ -478,7 +512,7 @@ async function loadOura() {
 
 function fillProfileForm(profile = {}) {
   const form = $("#profile-form");
-  ["level", "experience", "playing_style", "strengths", "medical_context"].forEach((field) => {
+  ["level", "experience", "playing_style", "strengths", "mental_pattern", "medical_context"].forEach((field) => {
     form.elements.namedItem(field).value = profile[field] || "";
   });
 }
@@ -653,17 +687,55 @@ async function saveScore(event) {
 }
 
 function startCardFlow(eventType) {
+  const askOpponentStyle = eventType === "changeover"
+    && !state.activeBundle.events?.length
+    && !state.activeBundle.match.opponent_style;
   state.flow = {
     eventType,
     index: 0,
     working: [],
     notWorking: [],
     idempotencyKey: crypto.randomUUID(),
+    opponentStyleOffset: askOpponentStyle ? 1 : 0,
   };
   $("#advice-result").hidden = true;
   $("#card-flow").hidden = false;
-  renderTopicCard();
+  if (askOpponentStyle) {
+    renderOpponentStyleCard();
+  } else {
+    renderTopicCard();
+  }
   $("#card-flow").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function renderOpponentStyleCard() {
+  const container = $("#card-flow");
+  const total = TOPICS.length + 1 + state.flow.opponentStyleOffset;
+  container.innerHTML = `
+    ${renderProgress(1, total)}
+    <p class="eyebrow">СОПЕРНИК</p>
+    <div class="choice-buttons">
+      ${OPPONENT_STYLE_CHIPS.map((label, index) => `<button type="button" class="choice-chip" data-style-index="${index}">${label}</button>`).join("")}
+      <button type="button" class="choice-skip" data-style-index="skip">Пока не понятно</button>
+    </div>`;
+  container.querySelectorAll("[data-style-index]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const index = button.dataset.styleIndex;
+      if (index !== "skip") {
+        const opponentStyle = OPPONENT_STYLE_CHIPS[Number(index)];
+        try {
+          const result = await apiFetch(`/api/matches/${state.activeBundle.match.id}/opponent-style`, {
+            method: "PATCH",
+            body: JSON.stringify({ opponent_style: opponentStyle }),
+          });
+          state.activeBundle.match = result.match;
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+      renderTopicCard();
+    });
+  });
 }
 
 function renderProgress(current, total) {
@@ -676,7 +748,7 @@ function renderTopicCard() {
   const topic = TOPICS[flow.index];
   const container = $("#card-flow");
   container.innerHTML = `
-    ${renderProgress(flow.index + 1, TOPICS.length + 1)}
+    ${renderProgress(flow.index + 1 + flow.opponentStyleOffset, TOPICS.length + 1 + flow.opponentStyleOffset)}
     <div class="topic-card">${topic.label}</div>
     <div class="choice-buttons">
       <button type="button" class="choice-good" data-choice="good">✓ Идёт</button>
@@ -705,7 +777,7 @@ function renderFeelingStep() {
        </label>`
     : "";
   $("#card-flow").innerHTML = `
-    ${renderProgress(TOPICS.length + 1, TOPICS.length + 1)}
+    ${renderProgress(TOPICS.length + 1 + flow.opponentStyleOffset, TOPICS.length + 1 + flow.opponentStyleOffset)}
     <form id="feeling-form" class="feeling-form">
       <label>Как ты сейчас?
         <select id="event-feeling" required>
@@ -759,9 +831,13 @@ async function submitEvent(event) {
 async function finishMatch(event) {
   event.preventDefault();
   if (!state.activeBundle?.match) return;
+  const finalScore = finishScorePicker.serialize();
+  if (!finalScore) {
+    showToast("Укажите итоговый счёт по сетам");
+    return;
+  }
   const button = event.currentTarget.querySelector("button");
   setBusy(button, true, "Сохраняю…");
-  const finalScore = new FormData(event.currentTarget).get("final_score");
   try {
     const result = await apiFetch(`/api/matches/${state.activeBundle.match.id}/finish`, {
       method: "POST",
@@ -1069,11 +1145,12 @@ function bindEvents() {
   $("#prep-form").addEventListener("submit", submitPrep);
   $("#start-match").addEventListener("click", startMatch);
   $("#score-form").addEventListener("submit", saveScore);
-  $("#add-set-button").addEventListener("click", addSetScoreRow);
-  $("#remove-set-button").addEventListener("click", removeSetScoreRow);
   $("#score-game").addEventListener("change", () => { $("#score-display").textContent = displayScore(currentScore()); });
   $("#changeover-button").addEventListener("click", () => startCardFlow("changeover"));
   $("#new-set-button").addEventListener("click", () => startCardFlow("new_set"));
+  $(".match-controls").addEventListener("toggle", (event) => {
+    if (event.target.open) finishScorePicker.render(parseSetScores(state.activeBundle?.match?.current_score?.sets));
+  });
   $("#finish-form").addEventListener("submit", finishMatch);
   $("#cancel-match").addEventListener("click", cancelMatch);
   $("#refresh-history").addEventListener("click", loadHistory);
