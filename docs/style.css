@@ -58,24 +58,14 @@ main { width: min(100%, 760px); margin: 0 auto; padding: 22px 16px 108px; }
 .hero h2, .section-heading h2 { margin: 7px 0 8px; font-size: clamp(28px, 8vw, 46px); line-height: .98; letter-spacing: -.045em; }
 .hero p:last-child { color: var(--muted); line-height: 1.5; max-width: 590px; }
 
-.oura-card, fieldset, .advice-card, .scoreboard, .score-form, .history-detail, .empty-state, .match-controls, .review-panel {
+fieldset, .advice-card, .scoreboard, .score-form, .history-detail, .empty-state, .match-controls, .review-panel {
   border: 1px solid var(--line);
   background: linear-gradient(145deg, rgba(21,49,38,.96), rgba(12,31,23,.96));
   border-radius: 20px;
   box-shadow: var(--shadow);
 }
 
-.oura-card { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 18px; margin-bottom: 18px; }
-.oura-card h3 { margin: 5px 0 3px; }
 .muted { color: var(--muted); }
-.metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.metric { background: rgba(5,16,12,.42); border-radius: 13px; padding: 11px; }
-.metric strong { display: block; font-size: 22px; }
-.metric span { color: var(--muted); font-size: 11px; }
-.oura-card.stale { border-color: rgba(228,131,82,.48); }
-
-.switch-label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-.switch-label input { accent-color: var(--green); width: 20px; height: 20px; }
 
 .stack-form { display: grid; gap: 16px; }
 fieldset { display: grid; gap: 14px; padding: 18px; margin: 0; }

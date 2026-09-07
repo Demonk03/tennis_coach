@@ -1,11 +1,9 @@
 import hmac
 import logging
 import os
-from datetime import date, datetime
 from functools import wraps
 from typing import Any
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
@@ -142,34 +140,6 @@ def _valid_uuid(value: Any, field: str) -> str:
         raise APIError(f"Поле {field} должно быть UUID") from None
 
 
-def _oura_snapshot() -> dict[str, Any] | None:
-    user_id = os.getenv("OURA_USER_ID")
-    if not user_id:
-        return None
-    row = db.get_latest_oura_log(user_id)
-    if not row:
-        return None
-    try:
-        data_date = date.fromisoformat(str(row["date"]))
-        today = datetime.now(ZoneInfo(os.getenv("APP_TIMEZONE", "Europe/Moscow"))).date()
-        age_days = max((today - data_date).days, 0)
-    except (KeyError, ValueError):
-        age_days = 999
-    max_age = int(os.getenv("OURA_MAX_AGE_DAYS", "2"))
-    return {
-        "health_log_id": row.get("id"),
-        "date": row.get("date"),
-        "age_days": age_days,
-        "is_stale": age_days > max_age,
-        "readiness": row.get("readiness_score"),
-        "sleep_score": row.get("sleep_score"),
-        "average_hrv": row.get("average_hrv"),
-        "average_heart_rate": row.get("average_heart_rate"),
-        "total_sleep_duration": row.get("total_sleep_duration"),
-        "activity_score": row.get("activity_score"),
-    }
-
-
 def _bundle_or_404(match_id: str) -> dict[str, Any]:
     bundle = db.get_match_bundle(match_id)
     if not bundle:
@@ -189,12 +159,6 @@ def _is_unique_violation(error: Exception) -> bool:
 @app.get("/api/health")
 def health():
     return jsonify({"status": "ok"})
-
-
-@app.get("/api/oura/latest")
-@require_api_key
-def latest_oura():
-    return jsonify({"oura": _oura_snapshot()})
 
 
 @app.get("/api/profile")
@@ -240,13 +204,11 @@ def create_prep():
         "physical_state": _text(payload, "physical_state", max_length=300),
         "mindset": _text(payload, "mindset", max_length=300),
     }
-    oura = _oura_snapshot() if payload.get("use_oura", True) else None
-
     player_profile = db.get_player_profile()
     past_reviews = db.get_recent_reviews(limit=3)
     try:
         brief = gpt.generate_prep_brief(
-            match_data, survey, oura, past_reviews, player_profile
+            match_data, survey, past_reviews, player_profile
         )
     except Exception as error:
         logger.exception("Prep advice generation failed")
@@ -260,12 +222,6 @@ def create_prep():
         }
         prep = db.save_prep({
             "match_id": match["id"],
-            "oura_health_log_id": oura.get("health_log_id") if oura else None,
-            "oura_data_date": oura.get("date") if oura else None,
-            "oura_is_stale": oura.get("is_stale", False) if oura else False,
-            "oura_readiness": oura.get("readiness") if oura else None,
-            "oura_sleep_score": oura.get("sleep_score") if oura else None,
-            "oura_hrv": oura.get("average_hrv") if oura else None,
             "player_profile_snapshot": player_profile or {},
             **survey,
             "generated_brief_technical": brief["technical"],
@@ -276,7 +232,7 @@ def create_prep():
         db.cancel_match(match["id"])
         raise
 
-    return jsonify({"match": match, "prep": prep, "brief": brief, "oura": oura}), 201
+    return jsonify({"match": match, "prep": prep, "brief": brief}), 201
 
 
 @app.get("/api/matches/active")

@@ -29,7 +29,6 @@ def test_prep_brief_sends_structured_context(mocker):
     result = gpt.generate_prep_brief(
         {"surface": "hard", "opponent_level": "equal"},
         {"energy_level": 3, "physical_state": "нормально"},
-        {"readiness": 78, "average_hrv": 46},
         [{"generated_technical_summary": "Не торопиться на приёме"}],
         {"level": "клубный 3.5", "playing_style": "контратакующий"},
     )
@@ -45,7 +44,6 @@ def test_prep_brief_sends_structured_context(mocker):
     assert response_format["json_schema"]["strict"] is True
     assert response_format["json_schema"]["schema"]["properties"]["tactics"]["minItems"] == 3
     assert response_format["json_schema"]["schema"]["properties"]["tactics"]["maxItems"] == 3
-    assert '"readiness": 78' in call.kwargs["messages"][1]["content"]
     assert "Не торопиться на приёме" in call.kwargs["messages"][1]["content"]
     assert "клубный 3.5" in call.kwargs["messages"][1]["content"]
 
@@ -60,7 +58,7 @@ def test_prep_brief_rejects_plan_without_three_tactics(mocker):
     })
 
     try:
-        gpt.generate_prep_brief({}, {}, None, [], None)
+        gpt.generate_prep_brief({}, {}, [], None)
     except RuntimeError as error:
         assert "exactly three" in str(error)
     else:

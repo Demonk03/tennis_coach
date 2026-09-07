@@ -41,12 +41,6 @@ create unique index if not exists matches_one_active_idx
 create table if not exists match_prep (
   id uuid primary key default gen_random_uuid(),
   match_id uuid not null unique references matches(id) on delete cascade,
-  oura_health_log_id uuid references health_logs(id) on delete set null,
-  oura_data_date date,
-  oura_is_stale boolean not null default false,
-  oura_readiness integer,
-  oura_sleep_score integer,
-  oura_hrv numeric,
   player_profile_snapshot jsonb not null default '{}'::jsonb,
   energy_level integer not null check (energy_level between 1 and 5),
   last_meal text,
