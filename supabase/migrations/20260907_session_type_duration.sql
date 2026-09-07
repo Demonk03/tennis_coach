@@ -1,9 +1,14 @@
 -- Split session_format into two orthogonal axes: event type and time on court.
 -- session_format stays as a derived legacy column so older rows and clients keep working.
+--
+-- The backfill is deliberately idempotent: columns are added nullable and filled
+-- only where still empty. Recomputing from session_format is lossy in reverse
+-- (practice + 1_5h is stored as legacy 'friendly'), so a re-run must never
+-- overwrite rows the application has already written.
 
 alter table matches
-  add column if not exists session_type text not null default 'friendly',
-  add column if not exists session_duration text not null default 'unlimited';
+  add column if not exists session_type text,
+  add column if not exists session_duration text;
 
 update matches
 set
@@ -15,7 +20,16 @@ set
     when session_format = '1h_session' then '1h'
     when session_format = '2h_session' then '2h'
     else 'unlimited'
-  end;
+  end
+where session_type is null or session_duration is null;
+
+alter table matches
+  alter column session_type set default 'friendly',
+  alter column session_duration set default 'unlimited';
+
+alter table matches
+  alter column session_type set not null,
+  alter column session_duration set not null;
 
 alter table matches
   drop constraint if exists matches_session_type_check,
