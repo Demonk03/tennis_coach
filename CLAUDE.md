@@ -46,7 +46,7 @@ Backend использует service-role key. RLS включён, но policies
 
 ### Новые таблицы
 
-- `matches`: контекст, структурированный текущий счёт, итог, статус.
+- `matches`: контекст, структурированный текущий счёт, итог, статус. Формат сессии разделён на две независимые оси: `session_type` (`friendly`/`tournament`/`practice`) задаёт допустимый уровень риска в тактике, `session_duration` (`1h`/`1_5h`/`2h`/`unlimited`) задаёт дозировку нагрузки. Legacy-колонка `session_format` вычисляется из этой пары в `app.py` и сохраняется для старых строк и клиентов.
 - `player_profile`: единственный постоянный профиль игрока — уровень, опыт, стиль, сильные стороны и медицинский контекст.
 - `match_prep`: опрос, снимок профиля игрока, структурированный `generated_game_plan` и legacy-тексты `generated_brief_technical`/`generated_brief_mental` для старых клиентов.
 - `match_events`: два мультивыбора (`own_issues`, `opponent_actions`), комментарий, относительный счёт, стадия сета, совет и idempotency key. Legacy-поля не удалены.
@@ -87,5 +87,5 @@ node --check docs/app.js
 - Нет multi-user, полного offline, голоса и автоматического скоринга по очкам.
 - Экран статистических паттернов отложен до накопления 8–10 матчей.
 - Деплой и применение SQL требуют реальных секретов и выполняются отдельно.
-- Перед деплоем P1–P3 обязательно применить `20260907_changeover_observations.sql` и `20260907_match_review_opponent.sql`.
+- Перед деплоем P1–P3 обязательно применить `20260907_changeover_observations.sql`, `20260907_match_review_opponent.sql` и `20260907_session_type_duration.sql`.
 - Известная блокирующая проблема (на 2026-07-30): запросы из Safari к защищённым endpoint'ам на Railway (`tenniscoach-production.up.railway.app`) зависают без HTTP-ответа. `/api/health` (без auth и Supabase) отвечал нормально. Подробности и диагностика — в заметке Obsidian проекта.

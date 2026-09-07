@@ -21,6 +21,13 @@ create table if not exists matches (
   opponent_style text,
   surface text not null check (surface in ('hard', 'clay', 'grass', 'carpet', 'other')),
   weather text,
+  session_type text not null default 'friendly' check (
+    session_type in ('friendly', 'tournament', 'practice')
+  ),
+  session_duration text not null default 'unlimited' check (
+    session_duration in ('1h', '1_5h', '2h', 'unlimited')
+  ),
+  -- Derived from session_type + session_duration, kept for older rows and clients.
   session_format text not null check (
     session_format in ('tournament', '1h_session', '2h_session', 'friendly')
   ),

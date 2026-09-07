@@ -59,18 +59,25 @@
             <input name="opponent_style" maxlength="200" placeholder="Контратакует, высокий темп, слабее слева…">
           </label>
           <div class="field-row">
-            <label>Формат
-              <select name="session_format" required>
+            <label>Событие
+              <select name="session_type" required>
                 <option value="friendly">Товарищеский</option>
                 <option value="tournament">Турнир</option>
-                <option value="1h_session">1 час</option>
-                <option value="2h_session">2 часа</option>
+                <option value="practice">Тренировка</option>
               </select>
             </label>
-            <label>Погода
-              <input name="weather" maxlength="200" placeholder="Жарко, ветер…">
+            <label>Время на корте
+              <select name="session_duration" required>
+                <option value="unlimited">Без лимита</option>
+                <option value="1h">1 час</option>
+                <option value="1_5h">1,5 часа</option>
+                <option value="2h">2 часа</option>
+              </select>
             </label>
           </div>
+          <label>Погода
+            <input name="weather" maxlength="200" placeholder="Жарко, ветер…">
+          </label>
         </fieldset>
 
         <fieldset>
