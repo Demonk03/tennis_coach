@@ -42,8 +42,12 @@ def valid_review_payload():
     return {
         "physical_rating": 4,
         "mental_rating": 2,
-        "technical_comment": "Подача не шла весь матч",
-        "mental_comment": "После ошибок терял концентрацию",
+        "own_errors": "Подача не шла весь матч",
+        "emotional_state": "После ошибок терял концентрацию",
+        "opponent_style": "Защита, много подбирает",
+        "opponent_what_worked": "Глубоко под бэкхэнд",
+        "opponent_errors": "Не успевал к высокому мячу",
+        "advice_changed_play": True,
     }
 
 
@@ -69,6 +73,8 @@ def test_create_prep_generates_before_creating_match(client, mocker):
         "medical_context": "беречь поясницу",
     }
     mocker.patch("app.db.get_player_profile", return_value=profile)
+    opponent_history = [{"match_id": "old-match", "opponent_what_worked": "Играть глубоко"}]
+    history = mocker.patch("app.db.get_opponent_history", return_value=opponent_history)
     reviews = [{"generated_technical_summary": "Спокойнее на приёме"}]
     recent = mocker.patch("app.db.get_recent_reviews", return_value=reviews)
     generate = mocker.patch("app.gpt.generate_prep_brief", return_value={
@@ -95,7 +101,9 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     assert generate.call_count == 1
     assert generate.call_args.args[2] == reviews
     assert generate.call_args.args[3] == profile
+    assert generate.call_args.args[4] == opponent_history
     recent.assert_called_once_with(limit=3)
+    history.assert_called_once_with("Андрей", limit=5)
     assert create.call_count == 1
     saved = save.call_args.args[0]
     assert saved["generated_brief_technical"].startswith("Глубоко")
@@ -121,6 +129,41 @@ def test_invalid_prep_value_returns_400(client, mocker):
     payload["surface"] = "ice"
 
     response = client.post("/api/matches/prep", headers=AUTH, json=payload)
+
+    assert response.status_code == 400
+
+
+def test_opponent_history_returns_compact_card_after_one_review(client, mocker):
+    mocker.patch("app.db.get_opponent_history", return_value=[{
+        "match_id": "old-match",
+        "opponent_style": "Много слайсов",
+        "opponent_what_worked": "Играть глубоко",
+        "opponent_errors": "Ошибается по длине",
+    }])
+
+    response = client.get(
+        "/api/opponents/history?opponent_name=Андрей",
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["minimum_matches"] == 1
+    assert response.get_json()["card"]["what_worked"] == "Играть глубоко"
+
+
+def test_event_rejects_unknown_observation_chip(client, mocker):
+    mocker.patch("app.db.get_match_bundle", return_value=active_bundle())
+    mocker.patch("app.db.get_event_by_idempotency_key", return_value=None)
+
+    response = client.post("/api/matches/match-1/events", headers=AUTH, json={
+        "idempotency_key": "00000000-0000-0000-0000-000000000019",
+        "event_type": "changeover",
+        "own_issues": ["magic_shot"],
+        "opponent_actions": [],
+        "comment": "",
+        "score_state": "even",
+        "set_stage": "middle",
+    })
 
     assert response.status_code == 400
 
@@ -195,10 +238,11 @@ def test_new_set_requires_energy(client, mocker):
     response = client.post("/api/matches/match-1/events", headers=AUTH, json={
         "idempotency_key": "00000000-0000-0000-0000-000000000011",
         "event_type": "new_set",
-        "working_well": ["serve"],
-        "not_working": ["backhand"],
-        "how_feeling": "устал",
-        "score": {"sets": "4-6", "game": "0-0", "serving": "opponent"},
+        "own_issues": ["short_balls"],
+        "opponent_actions": ["slice"],
+        "comment": "устал",
+        "score_state": "behind",
+        "set_stage": "late",
     })
 
     assert response.status_code == 400
@@ -210,23 +254,28 @@ def test_changeover_event_receives_full_match_context(client, mocker):
     mocker.patch("app.db.get_match_bundle", return_value=bundle)
     mocker.patch("app.db.get_event_by_idempotency_key", return_value=None)
     generate = mocker.patch("app.gpt.generate_changeover_advice", return_value="Подавай в корпус.")
-    mocker.patch("app.db.add_event", return_value={"id": "event-2", "generated_advice": "Подавай в корпус."})
-    update_score = mocker.patch("app.db.update_score", return_value=bundle["match"])
+    add_event = mocker.patch("app.db.add_event", return_value={"id": "event-2", "generated_advice": "Подавай в корпус."})
 
     response = client.post("/api/matches/match-1/events", headers=AUTH, json={
         "idempotency_key": "00000000-0000-0000-0000-000000000012",
         "event_type": "changeover",
-        "working_well": ["serve"],
-        "not_working": ["return"],
-        "how_feeling": "спокоен",
-        "score": {"sets": "4-3", "game": "0-0", "serving": "self"},
+        "own_issues": ["overhitting"],
+        "opponent_actions": ["gets_everything_back"],
+        "comment": "тороплюсь в концовке",
+        "score_state": "ahead",
+        "set_stage": "late",
     })
 
     assert response.status_code == 201
     context = generate.call_args.args[0]
+    observation = generate.call_args.args[1]
     assert context["prep"]["generated_brief_technical"] == "Бриф"
     assert context["previous_events"][0]["id"] == "older-event"
-    update_score.assert_called_once()
+    assert observation["own_issues"] == ["overhitting"]
+    assert observation["score_state"] == "ahead"
+    saved = add_event.call_args.args[0]
+    assert saved["opponent_actions"] == ["gets_everything_back"]
+    assert saved["score_state"] == "ahead"
 
 
 def test_start_match_changes_state(client, mocker):
@@ -283,8 +332,9 @@ def test_review_rejects_non_terminal_match_without_ai_cost(client, mocker):
         ("physical_rating", 0),
         ("mental_rating", 6),
         ("physical_rating", True),
-        ("technical_comment", "x" * 501),
-        ("mental_comment", ""),
+        ("own_errors", "x" * 501),
+        ("emotional_state", ""),
+        ("advice_changed_play", "yes"),
     ],
 )
 def test_review_validates_input(client, mocker, field, value):
@@ -317,6 +367,9 @@ def test_review_saves_both_summaries_with_missing_prep(client, mocker):
     saved = save.call_args.args[0]
     assert saved["generated_technical_summary"].startswith("На следующем")
     assert saved["generated_mental_summary"].startswith("После ошибки")
+    assert saved["technical_comment"] == saved["own_errors"]
+    assert saved["mental_comment"] == saved["emotional_state"]
+    assert saved["advice_changed_play"] is True
 
 
 def test_duplicate_review_maps_database_constraint_to_conflict(client, mocker):

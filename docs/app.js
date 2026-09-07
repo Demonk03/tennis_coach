@@ -1,10 +1,19 @@
-const TOPICS = [
-  { key: "forehand", label: "Форхенд" },
-  { key: "backhand", label: "Бэкхэнд" },
-  { key: "serve", label: "Подача" },
-  { key: "return", label: "Приём" },
-  { key: "movement", label: "Движение" },
-  { key: "net", label: "Игра у сетки" },
+const SELF_ISSUES = [
+  { key: "many_errors", label: "Много своих ошибок" },
+  { key: "overhitting", label: "Рискую" },
+  { key: "short_balls", label: "Не доношу мяч" },
+  { key: "slow_movement", label: "Не двигаюсь" },
+  { key: "tight", label: "Зажался" },
+  { key: "emotionally_drained", label: "Не тяну эмоционально" },
+];
+
+const OPPONENT_ACTIONS = [
+  { key: "slice", label: "Режет" },
+  { key: "drop_shots", label: "Укорачивает" },
+  { key: "gets_everything_back", label: "Возвращает всё" },
+  { key: "baseline_pressure", label: "Давит с задней" },
+  { key: "flat_hitting", label: "Играет плоско" },
+  { key: "comes_to_net", label: "Выходит к сетке" },
 ];
 
 const OPPONENT_STYLE_CHIPS = [
@@ -26,6 +35,8 @@ const state = {
   profileLoaded: false,
   flow: null,
   toastTimer: null,
+  opponentCardTimer: null,
+  opponentCardRequest: 0,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -169,6 +180,56 @@ function renderMatchPlan(container, plan, fallbackTechnical = "", fallbackMental
   container.replaceChildren(opponent, tactics, support, focus);
 }
 
+function renderOpponentCard(card) {
+  const container = $("#opponent-card");
+  if (!card) {
+    container.hidden = true;
+    container.replaceChildren();
+    return;
+  }
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  const matchWord = card.match_count === 1 ? "МАТЧ" : card.match_count < 5 ? "МАТЧА" : "МАТЧЕЙ";
+  eyebrow.textContent = `ПАМЯТЬ · ${card.match_count} ${matchWord}`;
+  const title = document.createElement("h3");
+  title.textContent = card.opponent_name;
+  const facts = document.createElement("dl");
+  facts.className = "opponent-facts";
+  [
+    ["Стиль", card.style],
+    ["Что работало", card.what_worked],
+    ["Где ошибается", card.errors],
+  ].forEach(([label, value]) => {
+    if (!value) return;
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const description = document.createElement("dd");
+    description.textContent = value;
+    facts.append(term, description);
+  });
+  container.replaceChildren(eyebrow, title, facts);
+  container.hidden = false;
+}
+
+async function loadOpponentCard(opponentName) {
+  const requestId = state.opponentCardRequest + 1;
+  state.opponentCardRequest = requestId;
+  const name = opponentName.trim();
+  if (name.length < 2 || !apiKey()) return renderOpponentCard(null);
+  try {
+    const result = await apiFetch(`/api/opponents/history?opponent_name=${encodeURIComponent(name)}`);
+    if (requestId === state.opponentCardRequest) renderOpponentCard(result.card);
+  } catch (error) {
+    if (requestId === state.opponentCardRequest) renderOpponentCard(null);
+  }
+}
+
+function scheduleOpponentCard(event) {
+  clearTimeout(state.opponentCardTimer);
+  state.opponentCardTimer = setTimeout(() => loadOpponentCard(event.target.value), 450);
+}
+
 function renderReviewSummary(container, summary, showHistoryButton = false) {
   container.hidden = false;
   container.replaceChildren();
@@ -196,30 +257,57 @@ function renderReviewSummary(container, summary, showHistoryButton = false) {
   }
 }
 
-function renderReviewForm(container, matchId, showHistoryButton = false) {
+function reviewStyleChoices(selectedStyle = "") {
+  return OPPONENT_STYLE_CHIPS.map((style) => `
+    <label class="select-chip">
+      <input type="radio" name="opponent_style" value="${style}" ${style === selectedStyle ? "checked" : ""}>
+      <span>${style}</span>
+    </label>`).join("");
+}
+
+function renderReviewForm(container, matchId, showHistoryButton = false, selectedStyle = "") {
   container.hidden = false;
   container.innerHTML = `
     <p class="eyebrow">ПОСЛЕ МАТЧА</p>
     <h3>Что забираем с собой?</h3>
-    <p class="muted">Отдельно посмотрим на игру и на то, что происходило внутри.</p>
+    <p class="muted">Три отдельных слоя: моя игра, состояние и соперник.</p>
     <form class="stack-form review-form">
       <fieldset>
-        <legend>Тренер</legend>
+        <legend>Моя игра</legend>
         <label>Физическое состояние <output data-rating-output="physical">3 / 5</output>
           <input name="physical_rating" data-rating="physical" type="range" min="1" max="5" value="3">
         </label>
-        <label>Техника, физика и тактика
-          <textarea name="technical_comment" maxlength="500" required placeholder="Что работало, что не получалось, где не хватило сил?"></textarea>
+        <label>Мои ошибки
+          <textarea name="own_errors" maxlength="500" required placeholder="Где ошибался и почему?"></textarea>
         </label>
       </fieldset>
       <fieldset>
-        <legend>Психолог</legend>
+        <legend>Моё состояние</legend>
         <label>Устойчивость и фокус <output data-rating-output="mental">3 / 5</output>
           <input name="mental_rating" data-rating="mental" type="range" min="1" max="5" value="3">
         </label>
         <label>Эмоции и концентрация
-          <textarea name="mental_comment" maxlength="500" required placeholder="Что происходило после ошибок и сложных эпизодов?"></textarea>
+          <textarea name="emotional_state" maxlength="500" required placeholder="Что происходило после ошибок и сложных эпизодов?"></textarea>
         </label>
+      </fieldset>
+      <fieldset>
+        <legend>Соперник</legend>
+        <div class="form-label">Стиль <span class="optional-mark">если понятен</span></div>
+        <div class="select-chip-grid" role="radiogroup" aria-label="Стиль соперника">${reviewStyleChoices(selectedStyle)}</div>
+        <label>Что против него работало
+          <textarea name="opponent_what_worked" maxlength="500" required placeholder="Например: глубоко под бэкхэнд"></textarea>
+        </label>
+        <label>На чём он ошибался
+          <textarea name="opponent_errors" maxlength="500" required placeholder="Например: не успевал к высокому мячу"></textarea>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Ценность совета</legend>
+        <div class="form-label">Совет что-то изменил на корте?</div>
+        <div class="binary-choice" role="radiogroup" aria-label="Совет изменил игру">
+          <label class="select-chip"><input type="radio" name="advice_changed_play" value="true" required><span>Да</span></label>
+          <label class="select-chip"><input type="radio" name="advice_changed_play" value="false" required><span>Нет</span></label>
+        </div>
       </fieldset>
       <button class="primary-button" type="submit">Получить разбор</button>
     </form>`;
@@ -236,6 +324,7 @@ function renderReviewForm(container, matchId, showHistoryButton = false) {
     const payload = Object.fromEntries(formData.entries());
     payload.physical_rating = Number(payload.physical_rating);
     payload.mental_rating = Number(payload.mental_rating);
+    payload.advice_changed_play = payload.advice_changed_play === "true";
     setBusy(button, true, "Разбираю…");
     try {
       const result = await apiFetch(`/api/matches/${matchId}/review`, {
@@ -637,85 +726,26 @@ async function saveScore(event) {
 }
 
 function startCardFlow(eventType) {
-  const askOpponentStyle = eventType === "changeover"
-    && !state.activeBundle.events?.length
-    && !state.activeBundle.match.opponent_style;
   state.flow = {
     eventType,
-    index: 0,
-    working: [],
-    notWorking: [],
+    ownIssues: [],
+    opponentActions: [],
     idempotencyKey: crypto.randomUUID(),
-    opponentStyleOffset: askOpponentStyle ? 1 : 0,
   };
   $("#advice-result").hidden = true;
   $("#card-flow").hidden = false;
-  if (askOpponentStyle) {
-    renderOpponentStyleCard();
-  } else {
-    renderTopicCard();
-  }
+  renderObservationForm();
   $("#card-flow").scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-async function renderOpponentStyleCard() {
-  const container = $("#card-flow");
-  const total = TOPICS.length + 1 + state.flow.opponentStyleOffset;
-  container.innerHTML = `
-    ${renderProgress(1, total)}
-    <p class="eyebrow">СОПЕРНИК</p>
-    <div class="choice-buttons">
-      ${OPPONENT_STYLE_CHIPS.map((label, index) => `<button type="button" class="choice-chip" data-style-index="${index}">${label}</button>`).join("")}
-      <button type="button" class="choice-skip" data-style-index="skip">Пока не понятно</button>
-    </div>`;
-  container.querySelectorAll("[data-style-index]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const index = button.dataset.styleIndex;
-      if (index !== "skip") {
-        const opponentStyle = OPPONENT_STYLE_CHIPS[Number(index)];
-        try {
-          const result = await apiFetch(`/api/matches/${state.activeBundle.match.id}/opponent-style`, {
-            method: "PATCH",
-            body: JSON.stringify({ opponent_style: opponentStyle }),
-          });
-          state.activeBundle.match = result.match;
-        } catch (error) {
-          showToast(error.message);
-        }
-      }
-      renderTopicCard();
-    });
-  });
+function renderObservationChips(items, group) {
+  return items.map((item) => `
+    <button type="button" class="observation-chip" data-observation-group="${group}" data-observation-key="${item.key}" aria-pressed="false">
+      ${item.label}
+    </button>`).join("");
 }
 
-function renderProgress(current, total) {
-  return `<div class="flow-progress" aria-label="Шаг ${current} из ${total}"><span style="width:${Math.min((current / total) * 100, 100)}%"></span></div>`;
-}
-
-function renderTopicCard() {
-  const flow = state.flow;
-  if (flow.index >= TOPICS.length) return renderFeelingStep();
-  const topic = TOPICS[flow.index];
-  const container = $("#card-flow");
-  container.innerHTML = `
-    ${renderProgress(flow.index + 1 + flow.opponentStyleOffset, TOPICS.length + 1 + flow.opponentStyleOffset)}
-    <div class="topic-card">${topic.label}</div>
-    <div class="choice-buttons">
-      <button type="button" class="choice-good" data-choice="good">✓ Идёт</button>
-      <button type="button" class="choice-bad" data-choice="bad">× Не идёт</button>
-      <button type="button" class="choice-skip" data-choice="skip">— Пропустить</button>
-    </div>`;
-  container.querySelectorAll("[data-choice]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.choice === "good") flow.working.push(topic.key);
-      if (button.dataset.choice === "bad") flow.notWorking.push(topic.key);
-      flow.index += 1;
-      renderTopicCard();
-    });
-  });
-}
-
-function renderFeelingStep() {
+function renderObservationForm() {
   const flow = state.flow;
   const energy = flow.eventType === "new_set"
     ? `<label>Запас сил
@@ -727,36 +757,79 @@ function renderFeelingStep() {
        </label>`
     : "";
   $("#card-flow").innerHTML = `
-    ${renderProgress(TOPICS.length + 1 + flow.opponentStyleOffset, TOPICS.length + 1 + flow.opponentStyleOffset)}
-    <form id="feeling-form" class="feeling-form">
-      <label>Как ты сейчас?
-        <select id="event-feeling" required>
-          <option value="спокоен и собран">Спокоен и собран</option>
-          <option value="нормально">Нормально</option>
-          <option value="устал, но контролирую состояние">Устал</option>
-          <option value="зажат и тороплюсь">Зажат / тороплюсь</option>
-          <option value="есть боль или дискомфорт">Боль / дискомфорт</option>
-        </select>
+    <form id="observation-form" class="observation-form">
+      <div class="flow-heading">
+        <p class="eyebrow">${flow.eventType === "new_set" ? "НОВЫЙ СЕТ" : "ПЕРЕХОД"}</p>
+        <h3>Отметь главное</h3>
+        <p>Можно выбрать несколько. Одного наблюдения достаточно.</p>
+      </div>
+      <section class="observation-group" aria-labelledby="own-issues-title">
+        <h4 id="own-issues-title">Что не идёт у меня</h4>
+        <div class="observation-chip-grid">${renderObservationChips(SELF_ISSUES, "own")}</div>
+      </section>
+      <section class="observation-group" aria-labelledby="opponent-actions-title">
+        <h4 id="opponent-actions-title">Что делает соперник</h4>
+        <div class="observation-chip-grid">${renderObservationChips(OPPONENT_ACTIONS, "opponent")}</div>
+      </section>
+      <section class="observation-meta">
+        <div>
+          <p class="form-label">Счёт</p>
+          <div class="segment-grid segment-grid-three" role="radiogroup" aria-label="Относительный счёт">
+            <label><input type="radio" name="score_state" value="ahead"><span>Веду</span></label>
+            <label><input type="radio" name="score_state" value="even" checked><span>Ровно</span></label>
+            <label><input type="radio" name="score_state" value="behind"><span>Горю</span></label>
+          </div>
+        </div>
+        <div>
+          <p class="form-label">Стадия сета</p>
+          <div class="segment-grid segment-grid-three" role="radiogroup" aria-label="Стадия сета">
+            <label><input type="radio" name="set_stage" value="early"><span>Начало</span></label>
+            <label><input type="radio" name="set_stage" value="middle" checked><span>Середина</span></label>
+            <label><input type="radio" name="set_stage" value="late"><span>Концовка</span></label>
+          </div>
+        </div>
+      </section>
+      <label>Комментарий <span class="optional-mark">необязательно</span>
+        <textarea id="event-comment" maxlength="300" placeholder="Если чипов не хватило"></textarea>
       </label>
       ${energy}
-      <p class="muted">Совет будет учитывать счёт ${displayScore(currentScore())}.</p>
-      <button class="primary-button" type="submit">Получить совет</button>
+      <button class="primary-button" type="submit">Дай один совет</button>
     </form>`;
-  $("#feeling-form").addEventListener("submit", submitEvent);
+  $("#card-flow").querySelectorAll("[data-observation-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.observationGroup === "own"
+        ? flow.ownIssues
+        : flow.opponentActions;
+      const key = button.dataset.observationKey;
+      const selected = target.includes(key);
+      if (selected) target.splice(target.indexOf(key), 1);
+      else target.push(key);
+      button.classList.toggle("selected", !selected);
+      button.setAttribute("aria-pressed", String(!selected));
+    });
+  });
+  $("#observation-form").addEventListener("submit", submitEvent);
 }
 
 async function submitEvent(event) {
   event.preventDefault();
-  const button = event.currentTarget.querySelector("button");
-  setBusy(button, true, "Думаю…");
+  const button = event.currentTarget.querySelector('button[type="submit"]');
   const flow = state.flow;
+  const comment = $("#event-comment").value.trim();
+  if (!flow.ownIssues.length && !flow.opponentActions.length && !comment) {
+    showToast("Отметь хотя бы одно наблюдение");
+    return;
+  }
+  setBusy(button, true, "Думаю…");
+  const formData = new FormData(event.currentTarget);
   const payload = {
     idempotency_key: flow.idempotencyKey,
     event_type: flow.eventType,
-    working_well: flow.working,
-    not_working: flow.notWorking,
-    how_feeling: $("#event-feeling").value,
-    score: currentScore(),
+    own_issues: flow.ownIssues,
+    opponent_actions: flow.opponentActions,
+    comment,
+    score_state: formData.get("score_state"),
+    set_stage: formData.get("set_stage"),
   };
   if (flow.eventType === "new_set") payload.energy_level = Number($("#event-energy").value);
 
@@ -766,7 +839,6 @@ async function submitEvent(event) {
       body: JSON.stringify(payload),
     });
     state.activeBundle.events = [...(state.activeBundle.events || []), result.event];
-    state.activeBundle.match.current_score = payload.score;
     $("#card-flow").hidden = true;
     $("#advice-text").textContent = result.advice;
     $("#advice-result").hidden = false;
@@ -798,7 +870,7 @@ async function finishMatch(event) {
     $("#no-active-match").hidden = true;
     $("#prep-form").hidden = false;
     $("#prep-result").hidden = true;
-    renderReviewForm($("#post-match-review"), result.match.id, true);
+    renderReviewForm($("#post-match-review"), result.match.id, true, result.match.opponent_style || "");
     $("#post-match-review").scrollIntoView({ behavior: "smooth", block: "start" });
     showToast("Матч сохранён. Теперь короткий разбор");
   } catch (error) {
@@ -926,6 +998,15 @@ function matchResult(match) {
   return result;
 }
 
+function eventContextLabel(event) {
+  const scoreLabels = { ahead: "веду", even: "ровно", behind: "горю" };
+  const stageLabels = { early: "начало сета", middle: "середина сета", late: "концовка сета" };
+  if (scoreLabels[event.score_state] && stageLabels[event.set_stage]) {
+    return `${scoreLabels[event.score_state]} · ${stageLabels[event.set_stage]}`;
+  }
+  return displayScore(event.score_at_event);
+}
+
 async function loadHistory() {
   const list = $("#matches-list");
   $("#match-detail").hidden = true;
@@ -1020,7 +1101,7 @@ async function loadMatchDetail(matchId) {
     bundle.events.forEach((event) => {
       const item = document.createElement("article");
       const title = document.createElement("strong");
-      title.textContent = `${event.event_type === "new_set" ? "Новый сет" : "Переход"} · ${displayScore(event.score_at_event)}`;
+      title.textContent = `${event.event_type === "new_set" ? "Новый сет" : "Переход"} · ${eventContextLabel(event)}`;
       const advice = document.createElement("p");
       advice.textContent = event.generated_advice;
       item.append(title, advice);
@@ -1039,7 +1120,7 @@ async function loadMatchDetail(matchId) {
       reviewButton.className = "secondary-button";
       reviewButton.textContent = "Разобрать матч";
       reviewButton.addEventListener("click", () => {
-        renderReviewForm(reviewSection, bundle.match.id);
+        renderReviewForm(reviewSection, bundle.match.id, false, bundle.match.opponent_style || "");
         reviewSection.scrollIntoView({ behavior: "smooth", block: "start" });
       });
       reviewSection.append(reviewButton);
@@ -1091,6 +1172,7 @@ async function saveSettings(event) {
 function bindEvents() {
   $$(".bottom-nav button").forEach((button) => button.addEventListener("click", () => showScreen(button.dataset.screen)));
   $$('[data-go="prep"]').forEach((button) => button.addEventListener("click", () => showScreen("prep")));
+  $("#prep-opponent-name").addEventListener("input", scheduleOpponentCard);
   $("#prep-energy").addEventListener("input", (event) => { $("#energy-output").textContent = `${event.target.value} / 5`; });
   $("#prep-form").addEventListener("submit", submitPrep);
   $("#start-match").addEventListener("click", startMatch);

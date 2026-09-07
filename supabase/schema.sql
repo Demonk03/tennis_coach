@@ -62,6 +62,11 @@ create table if not exists match_events (
   how_feeling text not null,
   energy_level integer check (energy_level between 1 and 5),
   score_at_event jsonb not null,
+  own_issues text[] not null default '{}',
+  opponent_actions text[] not null default '{}',
+  observation_comment text not null default '',
+  score_state text check (score_state in ('ahead', 'even', 'behind')),
+  set_stage text check (set_stage in ('early', 'middle', 'late')),
   generated_advice text not null,
   created_at timestamptz not null default now()
 );
@@ -73,6 +78,12 @@ create table if not exists match_reviews (
   mental_rating integer not null check (mental_rating between 1 and 5),
   technical_comment text not null,
   mental_comment text not null,
+  own_errors text not null default '',
+  emotional_state text not null default '',
+  opponent_style text not null default '',
+  opponent_what_worked text not null default '',
+  opponent_errors text not null default '',
+  advice_changed_play boolean,
   generated_technical_summary text not null,
   generated_mental_summary text not null,
   created_at timestamptz not null default now()

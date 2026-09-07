@@ -49,8 +49,9 @@
             </label>
           </div>
           <label>Соперник / имя
-            <input name="opponent_name" maxlength="100" placeholder="Например, Андрей">
+            <input id="prep-opponent-name" name="opponent_name" maxlength="100" autocomplete="off" placeholder="Например, Андрей">
           </label>
+          <aside id="opponent-card" class="opponent-card" aria-live="polite" hidden></aside>
           <label>Уровень соперника
             <input name="opponent_level" maxlength="100" required placeholder="Равный, сильнее, клубный 4.0…">
           </label>

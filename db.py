@@ -114,6 +114,44 @@ def get_recent_reviews(limit: int = 3) -> list[dict[str, Any]]:
     return response.data
 
 
+def get_opponent_history(opponent_name: str, limit: int = 5) -> list[dict[str, Any]]:
+    matches_response = (
+        get_client()
+        .table("matches")
+        .select("id,match_date,opponent_name,opponent_style,final_score")
+        .eq("opponent_name", opponent_name.strip())
+        .eq("status", "completed")
+        .order("match_date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    matches = matches_response.data
+    if not matches:
+        return []
+
+    reviews_response = (
+        get_client()
+        .table("match_reviews")
+        .select(
+            "match_id,opponent_style,opponent_what_worked,opponent_errors,created_at"
+        )
+        .in_("match_id", [match["id"] for match in matches])
+        .execute()
+    )
+    reviews_by_match = {review["match_id"]: review for review in reviews_response.data}
+    history = []
+    for match in matches:
+        review = reviews_by_match.get(match["id"])
+        if not review:
+            continue
+        history.append({
+            **match,
+            **review,
+            "opponent_style": review.get("opponent_style") or match.get("opponent_style") or "",
+        })
+    return history
+
+
 def get_match_bundle(match_id: str) -> dict[str, Any] | None:
     match = get_match(match_id)
     if not match:
