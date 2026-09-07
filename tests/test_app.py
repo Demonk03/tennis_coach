@@ -21,7 +21,8 @@ def valid_prep_payload():
         "opponent_style": "контратакует",
         "surface": "hard",
         "weather": "тепло",
-        "session_format": "friendly",
+        "session_type": "friendly",
+        "session_duration": "2h",
         "energy_level": 3,
         "last_meal": "обед два часа назад",
         "physical_state": "всё нормально",
@@ -131,6 +132,61 @@ def test_invalid_prep_value_returns_400(client, mocker):
     response = client.post("/api/matches/prep", headers=AUTH, json=payload)
 
     assert response.status_code == 400
+
+
+def test_invalid_session_duration_returns_400(client, mocker):
+    mocker.patch("app.db.get_active_match", return_value=None)
+    payload = valid_prep_payload()
+    payload["session_duration"] = "3h"
+
+    response = client.post("/api/matches/prep", headers=AUTH, json=payload)
+
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "session_type,session_duration,legacy",
+    [
+        ("friendly", "1h", "1h_session"),
+        ("friendly", "unlimited", "friendly"),
+        ("tournament", "1h", "tournament"),
+        ("tournament", "unlimited", "tournament"),
+        ("practice", "2h", "2h_session"),
+        ("practice", "1_5h", "friendly"),
+    ],
+)
+def test_session_axes_are_stored_and_derive_legacy_format(
+    client, mocker, session_type, session_duration, legacy
+):
+    mocker.patch("app.db.get_active_match", return_value=None)
+    mocker.patch("app.db.get_player_profile", return_value=None)
+    mocker.patch("app.db.get_recent_reviews", return_value=[])
+    mocker.patch("app.db.get_opponent_history", return_value=[])
+    generate = mocker.patch("app.gpt.generate_prep_brief", return_value={
+        "opponent_cue": "Соперник любит контратаковать.",
+        "tactics": ["Играй глубоко.", "Не открывай углы рано.", "Возвращайся в позицию."],
+        "body": "Начни без форсирования.",
+        "reset": "Отвернись → выдохни → выбери цель.",
+        "focus": "Глубина и активные ноги",
+        "technical": "Глубоко играй под бэкхэнд.",
+        "mental": "Возвращай внимание к следующему мячу.",
+    })
+    create = mocker.patch("app.db.create_match", return_value={"id": "match-1", "status": "preparing"})
+    mocker.patch("app.db.save_prep", return_value={"id": "prep-1"})
+    payload = valid_prep_payload()
+    payload["session_type"] = session_type
+    payload["session_duration"] = session_duration
+
+    response = client.post("/api/matches/prep", headers=AUTH, json=payload)
+
+    assert response.status_code == 201
+    created = create.call_args.args[0]
+    assert created["session_type"] == session_type
+    assert created["session_duration"] == session_duration
+    assert created["session_format"] == legacy
+    sent_to_ai = generate.call_args.args[0]
+    assert sent_to_ai["session_type"] == session_type
+    assert sent_to_ai["session_duration"] == session_duration
 
 
 def test_opponent_history_returns_compact_card_after_one_review(client, mocker):

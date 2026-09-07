@@ -44,7 +44,20 @@ OPPONENT_STYLE_CHIPS = {
 }
 MATCH_TYPES = {"singles", "doubles"}
 SURFACES = {"hard", "clay", "grass", "carpet", "other"}
-SESSION_FORMATS = {"tournament", "1h_session", "2h_session", "friendly"}
+SESSION_TYPES = {"friendly", "tournament", "practice"}
+SESSION_DURATIONS = {"1h", "1_5h", "2h", "unlimited"}
+# Legacy session_format is derived from the new pair so older rows and clients
+# keep working; the two axes above are what the plan is actually built from.
+LEGACY_SESSION_FORMATS = {
+    ("friendly", "1h"): "1h_session",
+    ("friendly", "2h"): "2h_session",
+    ("practice", "1h"): "1h_session",
+    ("practice", "2h"): "2h_session",
+    ("tournament", "1h"): "tournament",
+    ("tournament", "1_5h"): "tournament",
+    ("tournament", "2h"): "tournament",
+    ("tournament", "unlimited"): "tournament",
+}
 SCORE_KEYS = {"sets", "game", "serving"}
 SCORE_STATES = {"ahead", "even", "behind"}
 SET_STAGES = {"early", "middle", "late"}
@@ -223,6 +236,8 @@ def create_prep():
     if db.get_active_match():
         raise APIError("Сначала завершите или отмените активный матч", 409, "active_match_exists")
 
+    session_type = _choice(payload, "session_type", SESSION_TYPES)
+    session_duration = _choice(payload, "session_duration", SESSION_DURATIONS)
     match_data = {
         "match_type": _choice(payload, "match_type", MATCH_TYPES),
         "opponent_name": _text(payload, "opponent_name", required=False, max_length=100),
@@ -230,7 +245,9 @@ def create_prep():
         "opponent_style": _text(payload, "opponent_style", required=False, max_length=200),
         "surface": _choice(payload, "surface", SURFACES),
         "weather": _text(payload, "weather", required=False, max_length=200),
-        "session_format": _choice(payload, "session_format", SESSION_FORMATS),
+        "session_type": session_type,
+        "session_duration": session_duration,
+        "session_format": LEGACY_SESSION_FORMATS.get((session_type, session_duration), "friendly"),
     }
     survey = {
         "energy_level": _integer(payload, "energy_level", 1, 5),
