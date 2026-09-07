@@ -73,6 +73,14 @@ def test_prep_prompt_avoids_outcome_pressure_and_closed_eyes():
     assert "не предлагай закрывать глаза" in gpt.MATCH_PLAN_PROMPT
 
 
+def test_prep_prompt_turns_low_state_into_lower_risk_tactics():
+    assert "energy_level, physical_state и mindset" in gpt.MATCH_PLAN_PROMPT
+    assert "понизить риск" in gpt.MATCH_PLAN_PROMPT
+    assert "упростить первую подачу" in gpt.MATCH_PLAN_PROMPT
+    assert "запасом над сеткой" in gpt.MATCH_PLAN_PROMPT
+    assert "игровые решения, а не подбадривание" in gpt.MATCH_PLAN_PROMPT
+
+
 def test_prompts_treat_profile_as_context_and_protect_medical_boundaries():
     assert "player_profile" in gpt.MATCH_PLAN_PROMPT
     assert "текущее состояние" in gpt.MATCH_PLAN_PROMPT
