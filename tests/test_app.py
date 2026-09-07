@@ -1,5 +1,3 @@
-from datetime import date, timedelta
-
 import pytest
 
 import app as app_module
@@ -11,9 +9,6 @@ AUTH = {"Authorization": "Bearer test-key"}
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setenv("API_KEY", "test-key")
-    monkeypatch.setenv("OURA_USER_ID", "00000000-0000-0000-0000-000000000001")
-    monkeypatch.setenv("OURA_MAX_AGE_DAYS", "2")
-    monkeypatch.setenv("APP_TIMEZONE", "Europe/Moscow")
     app_module.app.config.update(TESTING=True)
     return app_module.app.test_client()
 
@@ -31,7 +26,6 @@ def valid_prep_payload():
         "last_meal": "обед два часа назад",
         "physical_state": "всё нормально",
         "mindset": "спокоен",
-        "use_oura": True,
     }
 
 
@@ -65,20 +59,6 @@ def test_protected_route_requires_auth(client):
     assert response.get_json()["error"]["code"] == "unauthorized"
 
 
-def test_latest_oura_marks_old_record_as_stale(client, mocker):
-    old_date = (date.today() - timedelta(days=4)).isoformat()
-    mocker.patch("app.db.get_latest_oura_log", return_value={
-        "id": "log-1", "date": old_date, "readiness_score": 72,
-        "sleep_score": 76, "average_hrv": 43.5,
-    })
-
-    response = client.get("/api/oura/latest", headers=AUTH)
-
-    assert response.status_code == 200
-    assert response.get_json()["oura"]["is_stale"] is True
-    assert response.get_json()["oura"]["average_hrv"] == 43.5
-
-
 def test_create_prep_generates_before_creating_match(client, mocker):
     mocker.patch("app.db.get_active_match", return_value=None)
     profile = {
@@ -89,10 +69,6 @@ def test_create_prep_generates_before_creating_match(client, mocker):
         "medical_context": "беречь поясницу",
     }
     mocker.patch("app.db.get_player_profile", return_value=profile)
-    mocker.patch("app.db.get_latest_oura_log", return_value={
-        "id": "log-1", "date": date.today().isoformat(), "readiness_score": 82,
-        "sleep_score": 79, "average_hrv": 48.0,
-    })
     reviews = [{"generated_technical_summary": "Спокойнее на приёме"}]
     recent = mocker.patch("app.db.get_recent_reviews", return_value=reviews)
     generate = mocker.patch("app.gpt.generate_prep_brief", return_value={
@@ -117,8 +93,8 @@ def test_create_prep_generates_before_creating_match(client, mocker):
     assert response.get_json()["match"]["id"] == "match-1"
     assert response.get_json()["brief"]["mental"].startswith("Возвращай")
     assert generate.call_count == 1
-    assert generate.call_args.args[3] == reviews
-    assert generate.call_args.args[4] == profile
+    assert generate.call_args.args[2] == reviews
+    assert generate.call_args.args[3] == profile
     recent.assert_called_once_with(limit=3)
     assert create.call_count == 1
     saved = save.call_args.args[0]

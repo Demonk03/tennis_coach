@@ -22,7 +22,6 @@ const DEFAULT_MAX_GAMES = 12;
 
 const state = {
   activeBundle: null,
-  oura: null,
   profile: null,
   profileLoaded: false,
   flow: null,
@@ -462,54 +461,6 @@ function setScoreFields(score = {}) {
   $("#score-display").textContent = displayScore(score);
 }
 
-function renderOura(oura) {
-  state.oura = oura;
-  const card = $("#oura-card");
-  const checkbox = $("#use-oura");
-  card.classList.toggle("stale", Boolean(oura?.is_stale));
-
-  if (!oura) {
-    $("#oura-title").textContent = "Данных пока нет";
-    $("#oura-meta").textContent = "План можно получить без показателей Oura.";
-    $("#oura-metrics").replaceChildren();
-    checkbox.checked = false;
-    checkbox.disabled = true;
-    return;
-  }
-
-  checkbox.disabled = false;
-  checkbox.checked = !oura.is_stale;
-  $("#oura-title").textContent = oura.is_stale ? "Есть данные, но они устарели" : "Данные готовы";
-  $("#oura-meta").textContent = `${formatDate(oura.date)} · ${oura.age_days === 0 ? "сегодня" : `${oura.age_days} дн. назад`}`;
-  const metrics = [
-    [oura.readiness ?? "—", "Readiness"],
-    [oura.sleep_score ?? "—", "Sleep"],
-    [oura.average_hrv != null ? `${Math.round(oura.average_hrv)}` : "—", "HRV, мс"],
-  ];
-  const container = $("#oura-metrics");
-  container.replaceChildren(...metrics.map(([value, label]) => {
-    const item = document.createElement("div");
-    item.className = "metric";
-    const strong = document.createElement("strong");
-    strong.textContent = value;
-    const span = document.createElement("span");
-    span.textContent = label;
-    item.append(strong, span);
-    return item;
-  }));
-}
-
-async function loadOura() {
-  if (!apiKey()) return renderOura(null);
-  try {
-    const result = await apiFetch("/api/oura/latest");
-    renderOura(result.oura);
-  } catch (error) {
-    renderOura(null);
-    showToast(error.message);
-  }
-}
-
 function fillProfileForm(profile = {}) {
   const form = $("#profile-form");
   ["level", "experience", "playing_style", "strengths", "mental_pattern", "medical_context"].forEach((field) => {
@@ -616,7 +567,6 @@ async function submitPrep(event) {
   const formData = new FormData(event.currentTarget);
   const payload = Object.fromEntries(formData.entries());
   payload.energy_level = Number(payload.energy_level);
-  payload.use_oura = $("#use-oura").checked;
 
   try {
     const result = await apiFetch("/api/matches/prep", {
@@ -1129,7 +1079,7 @@ async function saveSettings(event) {
     await apiFetch("/api/matches/active");
     status.className = "status-message success";
     status.textContent = "Подключение работает.";
-    await Promise.all([loadOura(), restoreActiveMatch(), loadProfile(true)]);
+    await Promise.all([restoreActiveMatch(), loadProfile(true)]);
   } catch (error) {
     status.className = "status-message error";
     status.textContent = error.message;
@@ -1176,12 +1126,11 @@ async function boot() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   if (!apiKey()) {
-    renderOura(null);
     showScreen("settings");
     $("#settings-status").textContent = "Сохраните параметры, чтобы начать.";
     return;
   }
-  await Promise.all([loadOura(), restoreActiveMatch(), loadProfile()]);
+  await Promise.all([restoreActiveMatch(), loadProfile()]);
 }
 
 boot();

@@ -7,12 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-OURA_FIELDS = (
-    "id,user_id,date,readiness_score,sleep_score,average_hrv,"
-    "average_heart_rate,total_sleep_duration,activity_score"
-)
-
-
 def get_client():
     """Create the Supabase client lazily so unit tests do not need the SDK."""
     from supabase import create_client
@@ -22,19 +16,6 @@ def get_client():
     if not url or not key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_KEY are required")
     return create_client(url, key)
-
-
-def get_latest_oura_log(user_id: str) -> dict[str, Any] | None:
-    response = (
-        get_client()
-        .table("health_logs")
-        .select(OURA_FIELDS)
-        .eq("user_id", user_id)
-        .order("date", desc=True)
-        .limit(1)
-        .execute()
-    )
-    return response.data[0] if response.data else None
 
 
 def get_player_profile() -> dict[str, Any] | None:

@@ -13,12 +13,9 @@ docs/ PWA (GitHub Pages)
         ↓ Bearer API key
 app.py Flask API (Railway)
         ├─ db.py → Supabase
-        │          ├─ users + health_logs (существующие таблицы Oura-v2)
         │          └─ player_profile + matches + match_prep + match_events + match_reviews
         └─ gpt.py → OpenAI API (тренер + психолог)
 ```
-
-Tennis-coach никогда не вызывает Oura API. Он только читает последнюю строку `health_logs` по `OURA_USER_ID`. Значения копируются в `match_prep`, чтобы история была неизменной.
 
 ## Компоненты
 
@@ -45,13 +42,13 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 
 ## Supabase
 
-Схему следует применять в том же Supabase-проекте, где уже есть `users` и `health_logs`. Backend использует service-role key. RLS включён, но policies для браузера отсутствуют: frontend не ходит в Supabase напрямую.
+Backend использует service-role key. RLS включён, но policies для браузера отсутствуют: frontend не ходит в Supabase напрямую.
 
 ### Новые таблицы
 
 - `matches`: контекст, структурированный текущий счёт, итог, статус.
 - `player_profile`: единственный постоянный профиль игрока — уровень, опыт, стиль, сильные стороны и медицинский контекст.
-- `match_prep`: опрос, снимки Oura и профиля игрока, структурированный `generated_game_plan` и legacy-тексты `generated_brief_technical`/`generated_brief_mental` для старых клиентов.
+- `match_prep`: опрос, снимок профиля игрока, структурированный `generated_game_plan` и legacy-тексты `generated_brief_technical`/`generated_brief_mental` для старых клиентов.
 - `match_events`: тип, чипы, состояние, счёт, совет, idempotency key.
 - `match_reviews`: post-match анкета (`physical_rating`, `mental_rating`, `technical_comment`, `mental_comment`) и сгенерированные выводы тренера/психолога, один разбор на матч.
 
@@ -70,11 +67,8 @@ Tennis-coach никогда не вызывает Oura API. Он только ч
 
 | Переменная | Назначение |
 |---|---|
-| `SUPABASE_URL` | URL существующего Supabase Oura-v2 |
+| `SUPABASE_URL` | URL Supabase-проекта |
 | `SUPABASE_KEY` | service-role key |
-| `OURA_USER_ID` | UUID нужной строки `users` |
-| `OURA_MAX_AGE_DAYS` | После скольких дней запись считается устаревшей |
-| `APP_TIMEZONE` | Часовой пояс проверки свежести |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `OPENAI_MODEL` | Модель, default `gpt-4o-mini` |
 | `API_KEY` | Личный ключ frontend → backend |
