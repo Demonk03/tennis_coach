@@ -31,6 +31,7 @@ def test_prep_brief_sends_structured_context(mocker):
         {"energy_level": 3, "physical_state": "нормально"},
         [{"generated_technical_summary": "Не торопиться на приёме"}],
         {"level": "клубный 3.5", "playing_style": "контратакующий"},
+        [{"opponent_what_worked": "Глубоко под бэкхэнд"}],
     )
 
     assert result["tactics"][0].startswith("Играй глубоко")
@@ -46,6 +47,7 @@ def test_prep_brief_sends_structured_context(mocker):
     assert response_format["json_schema"]["schema"]["properties"]["tactics"]["maxItems"] == 3
     assert "Не торопиться на приёме" in call.kwargs["messages"][1]["content"]
     assert "клубный 3.5" in call.kwargs["messages"][1]["content"]
+    assert "Глубоко под бэкхэнд" in call.kwargs["messages"][1]["content"]
 
 
 def test_prep_brief_rejects_plan_without_three_tactics(mocker):
@@ -97,14 +99,20 @@ def test_post_match_review_uses_two_voices_and_allows_missing_prep(mocker):
         {
             "physical_rating": 4,
             "mental_rating": 2,
-            "technical_comment": "Подача не шла",
-            "mental_comment": "Терял фокус после ошибок",
+            "own_errors": "Подача не шла",
+            "emotional_state": "Терял фокус после ошибок",
+            "opponent_style": "Много слайсов",
+            "opponent_what_worked": "Игра с запасом",
+            "opponent_errors": "Ошибался на высоком мяче",
+            "advice_changed_play": True,
         },
     )
 
     assert result == {"technical": "Вывод тренера", "mental": "Вывод психолога"}
     assert complete.call_count == 2
     assert complete.call_args_list[0].args[1]["prep"] is None
+    assert complete.call_args_list[0].args[1]["review_input"]["opponent_errors"].startswith("Ошибался")
+    assert complete.call_args_list[1].args[1]["review_input"]["advice_changed_play"] is True
     assert complete.call_args_list[1].kwargs["system_prompt"] == gpt.PSYCHOLOGIST_PROMPT
 
 

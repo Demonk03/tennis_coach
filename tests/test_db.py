@@ -72,6 +72,38 @@ def test_get_recent_reviews_uses_requested_limit(mocker):
     client.table.return_value.select.return_value.order.return_value.limit.assert_called_once_with(3)
 
 
+def test_get_opponent_history_joins_completed_matches_with_reviews(mocker):
+    client = mocker.MagicMock()
+    matches_table = mocker.MagicMock()
+    matches_query = (
+        matches_table.select.return_value.eq.return_value.eq.return_value.order.return_value.limit.return_value
+    )
+    matches_query.execute.return_value = SimpleNamespace(data=[{
+        "id": "match-1",
+        "opponent_name": "Андрей",
+        "opponent_style": "Много слайсов",
+    }])
+    reviews_table = mocker.MagicMock()
+    reviews_table.select.return_value.in_.return_value.execute.return_value = SimpleNamespace(data=[{
+        "match_id": "match-1",
+        "opponent_style": "",
+        "opponent_what_worked": "Играть глубоко",
+        "opponent_errors": "Ошибается по длине",
+    }])
+    client.table.side_effect = lambda name: {
+        "matches": matches_table,
+        "match_reviews": reviews_table,
+    }[name]
+    mocker.patch("db.get_client", return_value=client)
+
+    result = db.get_opponent_history("Андрей", limit=5)
+
+    assert result[0]["opponent_what_worked"] == "Играть глубоко"
+    assert result[0]["opponent_style"] == "Много слайсов"
+    matches_table.select.return_value.eq.assert_called_once_with("opponent_name", "Андрей")
+    reviews_table.select.return_value.in_.assert_called_once_with("match_id", ["match-1"])
+
+
 def test_list_matches_still_excludes_cancelled(mocker):
     client = mocker.MagicMock()
     query = (

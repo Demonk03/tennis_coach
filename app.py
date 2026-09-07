@@ -18,7 +18,22 @@ app = Flask(__name__)
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
 
-TOPICS = {"forehand", "backhand", "serve", "return", "movement", "net"}
+SELF_ISSUES = {
+    "many_errors",
+    "overhitting",
+    "short_balls",
+    "slow_movement",
+    "tight",
+    "emotionally_drained",
+}
+OPPONENT_ACTIONS = {
+    "slice",
+    "drop_shots",
+    "gets_everything_back",
+    "baseline_pressure",
+    "flat_hitting",
+    "comes_to_net",
+}
 OPPONENT_STYLE_CHIPS = {
     "Силовая игра с задней линии",
     "Укороты и игра у сетки",
@@ -31,6 +46,9 @@ MATCH_TYPES = {"singles", "doubles"}
 SURFACES = {"hard", "clay", "grass", "carpet", "other"}
 SESSION_FORMATS = {"tournament", "1h_session", "2h_session", "friendly"}
 SCORE_KEYS = {"sets", "game", "serving"}
+SCORE_STATES = {"ahead", "even", "behind"}
+SET_STAGES = {"early", "middle", "late"}
+OPPONENT_HISTORY_MIN_MATCHES = 1
 
 
 class APIError(Exception):
@@ -117,6 +135,22 @@ def _integer(payload: dict[str, Any], field: str, minimum: int, maximum: int) ->
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise APIError(f"Поле {field} должно быть числом от {minimum} до {maximum}")
     return value
+
+
+def _boolean(payload: dict[str, Any], field: str) -> bool:
+    value = payload.get(field)
+    if not isinstance(value, bool):
+        raise APIError(f"Поле {field} должно быть true или false")
+    return value
+
+
+def _choices(payload: dict[str, Any], field: str, allowed: set[str]) -> list[str]:
+    values = payload.get(field, [])
+    if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+        raise APIError(f"Поле {field} должно быть списком")
+    if len(values) != len(set(values)) or not set(values).issubset(allowed):
+        raise APIError(f"Недопустимое значение поля {field}")
+    return values
 
 
 def _score(payload: dict[str, Any], field: str = "score") -> dict[str, str]:
@@ -206,9 +240,14 @@ def create_prep():
     }
     player_profile = db.get_player_profile()
     past_reviews = db.get_recent_reviews(limit=3)
+    opponent_history = (
+        db.get_opponent_history(match_data["opponent_name"], limit=5)
+        if match_data["opponent_name"]
+        else []
+    )
     try:
         brief = gpt.generate_prep_brief(
-            match_data, survey, past_reviews, player_profile
+            match_data, survey, past_reviews, player_profile, opponent_history
         )
     except Exception as error:
         logger.exception("Prep advice generation failed")
@@ -232,7 +271,43 @@ def create_prep():
         db.cancel_match(match["id"])
         raise
 
-    return jsonify({"match": match, "prep": prep, "brief": brief}), 201
+    return jsonify({
+        "match": match,
+        "prep": prep,
+        "brief": brief,
+        "opponent_history": opponent_history,
+    }), 201
+
+
+@app.get("/api/opponents/history")
+@require_api_key
+def opponent_history():
+    opponent_name = _text(
+        {"opponent_name": request.args.get("opponent_name")},
+        "opponent_name",
+        max_length=100,
+    )
+    history = db.get_opponent_history(opponent_name, limit=5)
+    useful = [
+        item for item in history
+        if item.get("opponent_style")
+        or item.get("opponent_what_worked")
+        or item.get("opponent_errors")
+    ]
+    card = None
+    if len(useful) >= OPPONENT_HISTORY_MIN_MATCHES:
+        card = {
+            "opponent_name": opponent_name,
+            "match_count": len(useful),
+            "style": next((item.get("opponent_style") for item in useful if item.get("opponent_style")), ""),
+            "what_worked": next((item.get("opponent_what_worked") for item in useful if item.get("opponent_what_worked")), ""),
+            "errors": next((item.get("opponent_errors") for item in useful if item.get("opponent_errors")), ""),
+        }
+    return jsonify({
+        "card": card,
+        "history": history,
+        "minimum_matches": OPPONENT_HISTORY_MIN_MATCHES,
+    })
 
 
 @app.get("/api/matches/active")
@@ -286,21 +361,19 @@ def create_event(match_id: str):
         return jsonify({"event": existing, "advice": existing["generated_advice"], "deduplicated": True})
 
     event_type = _choice(payload, "event_type", {"changeover", "new_set"})
-    working = payload.get("working_well", [])
-    not_working = payload.get("not_working", [])
-    if not isinstance(working, list) or not isinstance(not_working, list):
-        raise APIError("Наблюдения должны быть списками")
-    if not set(working).issubset(TOPICS) or not set(not_working).issubset(TOPICS):
-        raise APIError("Неизвестная тема наблюдения")
-    if set(working) & set(not_working):
-        raise APIError("Одна тема не может одновременно идти и не идти")
+    own_issues = _choices(payload, "own_issues", SELF_ISSUES)
+    opponent_actions = _choices(payload, "opponent_actions", OPPONENT_ACTIONS)
+    comment = _text(payload, "comment", required=False, max_length=300)
+    if not own_issues and not opponent_actions and not comment:
+        raise APIError("Отметьте хотя бы одно наблюдение")
 
     observation = {
         "event_type": event_type,
-        "working_well": working,
-        "not_working": not_working,
-        "how_feeling": _text(payload, "how_feeling", max_length=200),
-        "score": _score(payload),
+        "own_issues": own_issues,
+        "opponent_actions": opponent_actions,
+        "comment": comment,
+        "score_state": _choice(payload, "score_state", SCORE_STATES),
+        "set_stage": _choice(payload, "set_stage", SET_STAGES),
     }
     energy_level = None
     if event_type == "new_set":
@@ -326,14 +399,18 @@ def create_event(match_id: str):
         "match_id": match_id,
         "idempotency_key": idempotency_key,
         "event_type": event_type,
-        "working_well": working,
-        "not_working": not_working,
-        "how_feeling": observation["how_feeling"],
+        "working_well": [],
+        "not_working": [],
+        "how_feeling": comment,
         "energy_level": energy_level,
-        "score_at_event": observation["score"],
+        "score_at_event": bundle["match"].get("current_score") or {},
+        "own_issues": own_issues,
+        "opponent_actions": opponent_actions,
+        "observation_comment": comment,
+        "score_state": observation["score_state"],
+        "set_stage": observation["set_stage"],
         "generated_advice": advice,
     })
-    db.update_score(match_id, observation["score"])
     return jsonify({"event": event, "advice": advice, "deduplicated": False}), 201
 
 
@@ -358,8 +435,12 @@ def create_review(match_id: str):
     review_input = {
         "physical_rating": _integer(payload, "physical_rating", 1, 5),
         "mental_rating": _integer(payload, "mental_rating", 1, 5),
-        "technical_comment": _text(payload, "technical_comment", max_length=500),
-        "mental_comment": _text(payload, "mental_comment", max_length=500),
+        "own_errors": _text(payload, "own_errors", max_length=500),
+        "emotional_state": _text(payload, "emotional_state", max_length=500),
+        "opponent_style": _text(payload, "opponent_style", required=False, max_length=200),
+        "opponent_what_worked": _text(payload, "opponent_what_worked", max_length=500),
+        "opponent_errors": _text(payload, "opponent_errors", max_length=500),
+        "advice_changed_play": _boolean(payload, "advice_changed_play"),
     }
     try:
         summary = gpt.generate_post_match_review(
@@ -375,6 +456,9 @@ def create_review(match_id: str):
         review = db.save_review({
             "match_id": match_id,
             **review_input,
+            # Keep legacy columns populated while older records and clients coexist.
+            "technical_comment": review_input["own_errors"],
+            "mental_comment": review_input["emotional_state"],
             "generated_technical_summary": summary["technical"],
             "generated_mental_summary": summary["mental"],
         })

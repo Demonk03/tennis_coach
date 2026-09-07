@@ -12,7 +12,7 @@
   --clay: #e48352;
   --danger: #ff7a7a;
   --shadow: 0 20px 70px rgba(0, 0, 0, 0.26);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Avenir Next", "Barlow", ui-sans-serif, system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -55,10 +55,10 @@ main { width: min(100%, 760px); margin: 0 auto; padding: 22px 16px 108px; }
 .eyebrow { margin: 0; color: var(--lime); font-size: 10px; font-weight: 800; letter-spacing: .17em; }
 .hero { padding: 14px 4px 20px; }
 .hero.compact { padding-bottom: 12px; }
-.hero h2, .section-heading h2 { margin: 7px 0 8px; font-size: clamp(28px, 8vw, 46px); line-height: .98; letter-spacing: -.045em; }
+.hero h2, .section-heading h2 { margin: 7px 0 8px; font-family: "Avenir Next Condensed", "Barlow Condensed", sans-serif; font-size: clamp(28px, 8vw, 46px); line-height: .98; letter-spacing: -.045em; }
 .hero p:last-child { color: var(--muted); line-height: 1.5; max-width: 590px; }
 
-fieldset, .advice-card, .scoreboard, .score-form, .history-detail, .empty-state, .match-controls, .review-panel {
+fieldset, .advice-card, .scoreboard, .score-form, .history-detail, .empty-state, .match-controls, .review-panel, .opponent-card {
   border: 1px solid var(--line);
   background: linear-gradient(145deg, rgba(21,49,38,.96), rgba(12,31,23,.96));
   border-radius: 20px;
@@ -104,6 +104,7 @@ output { float: right; color: var(--lime); }
 .danger-button { color: var(--danger); background: rgba(255,122,122,.08); border: 1px solid rgba(255,122,122,.25); }
 .icon-button { min-width: 48px; color: var(--text); background: rgba(255,255,255,.08); font-size: 22px; }
 button:disabled { opacity: .55; cursor: wait; }
+button:focus-visible, .select-chip input:focus-visible + span, .segment-grid input:focus-visible + span { outline: 3px solid rgba(199,239,91,.55); outline-offset: 2px; }
 
 .advice-card { padding: 20px; margin-top: 18px; border-left: 4px solid var(--lime); }
 .advice-card > p:not(.eyebrow) { font-size: 18px; line-height: 1.55; white-space: pre-wrap; }
@@ -140,6 +141,20 @@ button:disabled { opacity: .55; cursor: wait; }
 .review-panel h3, .history-review h3 { margin: 7px 0 8px; font-size: 24px; }
 .review-panel > .primary-button { width: 100%; margin-top: 8px; }
 .review-form { margin-top: 18px; }
+.form-label { margin: 0 0 8px; color: #dbe8df; font-size: 13px; font-weight: 650; }
+.optional-mark { color: var(--muted); font-size: 11px; font-weight: 500; }
+.select-chip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.select-chip { display: block; }
+.select-chip input, .segment-grid input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.select-chip span, .segment-grid span { display: grid; place-items: center; min-height: 48px; padding: 9px 10px; color: #dbe8df; background: rgba(4,15,11,.62); border: 1px solid rgba(222,244,231,.16); border-radius: 12px; font-size: 13px; font-weight: 750; line-height: 1.25; text-align: center; transition: background .18s ease, border-color .18s ease, color .18s ease; }
+.select-chip input:checked + span, .segment-grid input:checked + span { color: #062015; background: var(--lime); border-color: var(--lime); }
+.binary-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.opponent-card { padding: 18px; border-left: 4px solid var(--clay); box-shadow: none; }
+.opponent-card h3 { margin: 5px 0 14px; font-family: "Avenir Next Condensed", "Barlow Condensed", sans-serif; font-size: 28px; letter-spacing: -.03em; }
+.opponent-facts { display: grid; grid-template-columns: minmax(92px, .7fr) 1.8fr; gap: 8px 12px; margin: 0; }
+.opponent-facts dt { color: var(--clay); font-size: 10px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.opponent-facts dd { margin: 0; color: var(--text); font-size: 14px; line-height: 1.4; }
 
 .empty-state { text-align: center; padding: 46px 24px; }
 .empty-state h2 { margin-bottom: 8px; }
@@ -201,6 +216,18 @@ button:disabled { opacity: .55; cursor: wait; }
 .event-actions { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin: 18px 0; }
 
 .card-flow { border-radius: 22px; padding: 18px; background: var(--panel); border: 1px solid var(--line); }
+.observation-form { display: grid; gap: 18px; }
+.flow-heading h3 { margin: 6px 0; font-family: "Avenir Next Condensed", "Barlow Condensed", sans-serif; font-size: 30px; letter-spacing: -.035em; }
+.flow-heading p:last-child { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.observation-group { display: grid; gap: 9px; }
+.observation-group h4 { margin: 0; color: var(--text); font-size: 15px; }
+.observation-chip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.observation-chip { min-height: 52px; padding: 9px 10px; color: #dbe8df; background: rgba(4,15,11,.62); border: 1px solid rgba(222,244,231,.16); border-radius: 13px; font-size: 13px; font-weight: 750; line-height: 1.2; touch-action: manipulation; transition: background .18s ease, border-color .18s ease, color .18s ease; }
+.observation-chip.selected { color: #062015; background: var(--lime); border-color: var(--lime); }
+.observation-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.segment-grid { display: grid; gap: 6px; }
+.segment-grid-three { grid-template-columns: repeat(3, 1fr); }
+.segment-grid span { min-height: 44px; padding: 6px 4px; font-size: 11px; touch-action: manipulation; }
 .flow-progress { height: 4px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; margin-bottom: 18px; }
 .flow-progress span { display: block; height: 100%; background: var(--lime); transition: width .2s ease; }
 .topic-card { min-height: 180px; display: grid; place-items: center; border-radius: 18px; background: linear-gradient(145deg, #18452f, #0c291d); font-size: 30px; font-weight: 850; text-align: center; text-transform: uppercase; letter-spacing: -.03em; }
@@ -289,6 +316,7 @@ button:disabled { opacity: .55; cursor: wait; }
   .match-list-item { align-items: start; }
   .match-result { align-items: flex-end; flex-direction: column; gap: 7px; }
   .history-detail-heading { align-items: flex-start; }
+  .observation-meta { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

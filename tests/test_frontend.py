@@ -87,6 +87,34 @@ def test_match_score_uses_scrollable_set_wheels():
     assert ".score-wheel-option.is-selected" in stylesheet
 
 
+def test_changeover_uses_two_fast_multiselect_dictionaries():
+    javascript = (DOCS / "app.js").read_text()
+    stylesheet = (DOCS / "style.css").read_text()
+
+    assert "const SELF_ISSUES" in javascript
+    assert "const OPPONENT_ACTIONS" in javascript
+    assert 'name="score_state"' in javascript
+    assert 'name="set_stage"' in javascript
+    assert 'id="event-comment"' in javascript
+    assert "querySelector('button[type=\"submit\"]')" in javascript
+    assert "TOPICS" not in javascript
+    assert ".observation-chip" in stylesheet
+    assert "min-height: 52px" in stylesheet
+
+
+def test_review_and_prep_expose_opponent_memory():
+    javascript = (DOCS / "app.js").read_text()
+    html = (DOCS / "index.html").read_text()
+
+    assert 'name="own_errors"' in javascript
+    assert 'name="emotional_state"' in javascript
+    assert 'name="opponent_what_worked"' in javascript
+    assert 'name="opponent_errors"' in javascript
+    assert 'name="advice_changed_play"' in javascript
+    assert 'id="opponent-card"' in html
+    assert "/api/opponents/history" in javascript
+
+
 def test_completed_match_can_be_deleted_from_history_with_confirmation():
     javascript = (DOCS / "app.js").read_text()
     stylesheet = (DOCS / "style.css").read_text()
