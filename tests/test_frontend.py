@@ -35,93 +35,18 @@ def test_frontend_config_does_not_contain_secret():
     assert "Bearer" not in config
 
 
-def test_match_history_exposes_result_and_set_winner_styles():
-    javascript = (DOCS / "app.js").read_text()
-    stylesheet = (DOCS / "style.css").read_text()
 
-    assert 'badge.textContent = "W"' in javascript
-    assert 'badge.textContent = "L"' in javascript
-    assert 'set.self > set.opponent ? "strong"' in javascript
-    assert 'set.opponent > set.self ? "strong"' in javascript
-    assert ".match-list-item.result-win" in stylesheet
-    assert ".match-list-item.result-loss" in stylesheet
-
-
-def test_prep_uses_structured_match_plan_with_legacy_fallback():
-    javascript = (DOCS / "app.js").read_text()
+def test_pult_screens_and_assets_are_present():
     html = (DOCS / "index.html").read_text()
-    stylesheet = (DOCS / "style.css").read_text()
-
-    assert "function renderMatchPlan" in javascript
-    assert "plan.tactics.length === 3" in javascript
-    assert "generated_game_plan" in javascript
-    assert 'id="prep-plan"' in html
-    assert ".plan-tactics" in stylesheet
-    assert ".plan-focus" in stylesheet
-
-
-def test_profile_screen_collects_durable_context():
-    javascript = (DOCS / "app.js").read_text()
-    html = (DOCS / "index.html").read_text()
-
-    assert 'id="screen-profile"' in html
-    assert 'name="level"' in html
-    assert 'name="experience"' in html
-    assert 'name="playing_style"' in html
-    assert 'name="strengths"' in html
-    assert 'name="medical_context"' in html
-    assert 'apiFetch("/api/profile"' in javascript
-    assert 'method: "PUT"' in javascript
+    css = (DOCS / "style.css").read_text()
+    for screen in ("prep", "plan", "match", "observation", "advice", "finish", "review", "history", "details", "dossier", "profile", "settings", "error"):
+        assert f'id="screen-{screen}"' in html
+    assert "support.js" not in html
+    assert "prefers-reduced-motion" in css
+    assert "scroll-snap-type: y mandatory" in css
+    assert 'data-theme="dark"' in css
 
 
-def test_match_score_uses_scrollable_set_wheels():
-    javascript = (DOCS / "app.js").read_text()
-    html = (DOCS / "index.html").read_text()
-    stylesheet = (DOCS / "style.css").read_text()
-
-    assert 'id="set-score-rows"' in html
-    assert 'id="add-set-button"' in html
-    assert 'id="remove-set-button"' in html
-    assert "function createScoreWheel" in javascript
-    assert "scroll-snap-type: y mandatory" in stylesheet
-    assert ".score-wheel-option.is-selected" in stylesheet
-
-
-def test_changeover_uses_two_fast_multiselect_dictionaries():
-    javascript = (DOCS / "app.js").read_text()
-    stylesheet = (DOCS / "style.css").read_text()
-
-    assert "const SELF_ISSUES" in javascript
-    assert "const OPPONENT_ACTIONS" in javascript
-    assert 'name="score_state"' in javascript
-    assert 'name="set_stage"' in javascript
-    assert 'id="event-comment"' in javascript
-    assert "querySelector('button[type=\"submit\"]')" in javascript
-    assert "TOPICS" not in javascript
-    assert ".observation-chip" in stylesheet
-    assert "min-height: 52px" in stylesheet
-
-
-def test_review_and_prep_expose_opponent_memory():
-    javascript = (DOCS / "app.js").read_text()
-    html = (DOCS / "index.html").read_text()
-
-    assert 'name="own_errors"' in javascript
-    assert 'name="emotional_state"' in javascript
-    assert 'name="opponent_what_worked"' in javascript
-    assert 'name="opponent_errors"' in javascript
-    assert 'name="advice_changed_play"' in javascript
-    assert 'id="opponent-card"' in html
-    assert "/api/opponents/history" in javascript
-
-
-def test_completed_match_can_be_deleted_from_history_with_confirmation():
-    javascript = (DOCS / "app.js").read_text()
-    stylesheet = (DOCS / "style.css").read_text()
-
-    assert "function deleteMatchFromHistory" in javascript
-    assert "window.confirm" in javascript
-    assert 'method: "DELETE"' in javascript
-    assert "/permanent" in javascript
-    assert "Удалить матч из истории" in javascript
-    assert ".history-actions" in stylesheet
+def test_ui_behavior_suite_exists():
+    # Behavior is exercised in Node's jsdom suite, not through fragile source substrings.
+    assert (ROOT / "tests" / "pult-ui.test.cjs").is_file()

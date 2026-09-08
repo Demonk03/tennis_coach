@@ -448,6 +448,8 @@ def create_review(match_id: str):
     if bundle["match"]["status"] not in {"completed", "cancelled"}:
         raise APIError("Разбор доступен только после завершения матча", 409, "invalid_match_state")
 
+    if bundle.get("review"):
+        raise APIError("Этот матч уже разобран", 409, "review_already_exists")
     payload = _json()
     review_input = {
         "physical_rating": _integer(payload, "physical_rating", 1, 5),
@@ -519,6 +521,11 @@ def list_matches():
 @require_api_key
 def match_detail(match_id: str):
     return jsonify(_bundle_or_404(match_id))
+
+
+import sys
+import pult
+pult.install(sys.modules[__name__])
 
 
 if __name__ == "__main__":
