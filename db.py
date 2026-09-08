@@ -191,16 +191,7 @@ def update_score(match_id: str, score: dict[str, str]) -> dict[str, Any] | None:
 
 
 def update_opponent_style(match_id: str, opponent_style: str) -> dict[str, Any] | None:
-    response = (
-        get_client()
-        .table("matches")
-        .update({"opponent_style": opponent_style})
-        .eq("id", match_id)
-        .eq("status", "in_progress")
-        .select("*")
-        .execute()
-    )
-    return response.data[0] if response.data else None
+    return update_style_v2(match_id, opponent_style)
 
 
 def finish_match(match_id: str, final_score: str) -> dict[str, Any] | None:
@@ -271,3 +262,56 @@ def list_matches(limit: int = 50) -> list[dict[str, Any]]:
         .execute()
     )
     return response.data
+
+
+# Pult v2: paginated reads avoid Supabase's default response cap.
+def read_all(table: str, filters: dict | None = None) -> list[dict]:
+    result = []
+    offset = 0
+    while True:
+        query = get_client().table(table).select('*').order('id' if table != 'opponent_dossiers' else 'opponent_name')
+        for key, value in (filters or {}).items():
+            query = query.eq(key, value)
+        page = query.range(offset, offset + 499).execute().data
+        result.extend(page)
+        if len(page) < 500:
+            return result
+        offset += 500
+
+
+def claim_operation(key, kind, match_id, body_hash):
+    return get_client().rpc('pult_claim_operation', {
+        'p_id': key, 'p_kind': kind, 'p_match_id': match_id, 'p_hash': body_hash,
+    }).execute().data
+
+
+def commit_operation(key, token, payload):
+    return get_client().rpc('pult_commit_operation', {
+        'p_id': key, 'p_token': token, 'p_payload': payload,
+    }).execute().data
+
+
+def fail_operation(key, token, error):
+    get_client().rpc('pult_fail_operation', {'p_id': key, 'p_token': token, 'p_error': error}).execute()
+
+
+def get_operation(key):
+    data = get_client().table('pult_operations').select('*').eq('id', key).limit(1).execute().data
+    return data[0] if data else None
+
+
+def start_match_v2(match_id, revision=None):
+    return get_client().rpc('pult_start_match', {'p_match_id': match_id, 'p_revision': revision}).execute().data
+
+
+def update_style_v2(match_id, style):
+    return get_client().rpc('pult_update_style', {'p_match_id': match_id, 'p_style': style}).execute().data
+
+
+def dossier_cache(name):
+    rows = get_client().table('opponent_dossiers').select('*').eq('opponent_name', name).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def renew_operation(key, token):
+    return get_client().rpc('pult_renew_operation', {'p_id': key, 'p_token': token}).execute().data

@@ -22,6 +22,7 @@ app.py Flask API (Railway)
 | Файл | Назначение |
 |---|---|
 | `app.py` | Flask routes, auth, CORS, validation, lifecycle |
+| `pult.py` | Контракт v2, безопасные повторы, полная история, статистика и досье |
 | `db.py` | Все обращения к Supabase |
 | `gpt.py` | Промпты и вызовы OpenAI |
 | `supabase/schema.sql` | Tennis-таблицы, ограничения, индексы, RLS |
@@ -78,9 +79,20 @@ Backend использует service-role key. RLS включён, но policies
 
 ```bash
 python3 -m pytest -q
-python3 -m py_compile app.py db.py gpt.py
+python3 -m py_compile app.py db.py gpt.py pult.py
 node --check docs/app.js
+npm test  # после установки devDependencies
 ```
+
+## Пульт v2
+
+- Новый PWA использует `contract_version=2`; старые маршруты сохранены.
+- До старта подготовка меняется в том же матче с проверкой ревизии; после старта исходные анкета и план неизменны.
+- Операции подготовки, событий, завершения и разбора фиксируются транзакционно через `pult_operations`, с сохранённым результатом и защитой от устаревших запросов.
+- Снимок начального контекста хранится в `match_prep`; legacy-уточнения стиля — отдельными записями `match_context_updates`.
+- `app_helpful` (польза в целом) не объединять с прежним `advice_changed_play`.
+- Досье использует точный логин, все исходные наблюдения и ссылки на матчи; кэш — `opponent_dossiers`. Не объединять имена и логины автоматически.
+- Выпуск требует добавочной миграции `20260908_pult_v2.sql` до backend и frontend. Порядок резервирования, проверки истории и отката: [docs/deployment/pult-v2.md](docs/deployment/pult-v2.md). Не применять `20260907_remove_oura.sql` в рамках редизайна.
 
 ## Ограничения MVP
 

@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "description": "Development checks only; docs/ remains a build-free static PWA",
+  "scripts": {
+    "test": "node --test tests/pult-ui.test.cjs tests/pult-sql.test.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "jsdom": "30.0.1"
+  }
+}

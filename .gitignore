@@ -7,3 +7,4 @@ __pycache__/
 htmlcov/
 .venv/
 tennis-report-*.html
+node_modules/
