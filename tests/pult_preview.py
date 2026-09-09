@@ -7,7 +7,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ['API_KEY'] = 'preview-key'
-os.environ['DASHBOARD_ORIGIN'] = 'http://127.0.0.1:8770'
+os.environ['DASHBOARD_ORIGIN'] = os.getenv('PREVIEW_ORIGIN', 'http://127.0.0.1:8770')
 import app
 import db
 import gpt
@@ -68,4 +68,4 @@ db.renew_operation=lambda *args:True;db.claim_operation=claim;db.commit_operatio
 gpt.generate_prep_brief=lambda *args:plan.copy();gpt.generate_changeover_advice=lambda *args:'С его слайса не атакуй. Поднимай мяч выше и глубже — дай себе время вернуться в позицию.';gpt.generate_new_set_advice=lambda *args:'Начни сет с глубины и запаса над сеткой. На первой подаче снизь риск. Между розыгрышами выдохни и выбери одну цель. Сохрани силы для длинных геймов.'
 gpt.generate_post_match_review=lambda *args:{'technical':'Глубокий мяч помогал вернуть инициативу. В следующем матче начни с этого.','mental':'Короткий выдох помогал возвращаться к следующему мячу.'}
 gpt.generate_opponent_dossier=lambda sources, **kwargs:{'style':{'text':'Часто играет слайсом. По последним записям стиль стабилен.','match_ids':[sources[0]['match_id']]},'what_worked':{'text':'Высокий глубокий мяч под бэкхэнд.','match_ids':[sources[0]['match_id']]},'errors':{'text':'Ошибается на низких резаных.','match_ids':[sources[-1]['match_id']]}}
-if __name__=='__main__': app.app.run(host='127.0.0.1',port=8771)
+if __name__=='__main__': app.app.run(host='127.0.0.1',port=int(os.getenv('PREVIEW_PORT', '8771')))

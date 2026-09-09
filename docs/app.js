@@ -151,8 +151,22 @@ function hero(title, sub = "") {
 function input(label, name, value = "", opts = {}) {
   return `<label>${h(label)}<input name="${name}" value="${h(value)}" type="${opts.type || "text"}" maxlength="${opts.max || 200}" ${opts.required ? "required" : ""} ${opts.extra || ""} placeholder="${h(opts.placeholder || "")}"></label>`;
 }
-function textarea(label, name, placeholder = "", required = false, max = 500) {
-  return `<label>${h(label)}<textarea name="${name}" maxlength="${max}" ${required ? "required" : ""} placeholder="${h(placeholder)}"></textarea></label>`;
+function textarea(
+  label,
+  name,
+  placeholder = "",
+  required = false,
+  max = 500,
+  extra = "",
+) {
+  return `<label>${h(label)}<textarea name="${name}" maxlength="${max}" ${required ? "required" : ""} ${extra} placeholder="${h(placeholder)}"></textarea></label>`;
+}
+function formSection(title, content) {
+  return `<section class="form-section"><h2 class="form-section-title">${h(title)}</h2>${content}</section>`;
+}
+function growTextarea(field) {
+  field.style.height = "auto";
+  if (field.scrollHeight) field.style.height = `${field.scrollHeight + 2}px`;
 }
 function select(label, name, items) {
   return `<label>${label}<select name="${name}">${items.map(([v, t]) => `<option value="${v}">${h(t)}</option>`).join("")}</select></label>`;
@@ -344,27 +358,26 @@ function renderPrep(edit = false) {
       edit ? "Обновим план" : "Соберём план на матч",
       "Три ориентира, нагрузка и ритуал между розыгрышами.",
     ) +
-      `<form id="prep-form" class="stack-form"><fieldset><legend>Матч</legend><div class="field-row">${select(
-        "Тип",
-        "match_type",
-        [
+      `<form id="prep-form" class="stack-form">${formSection(
+        "Матч",
+        `<div class="field-row">${select("Тип", "match_type", [
           ["singles", "Одиночка"],
           ["doubles", "Пара"],
-        ],
-      )}${select("Покрытие", "surface", Object.entries(SURFACES))}</div>${input("Логин соперника · необязательно", "opponent_name", "", { max: 100, extra: 'id="prep-opponent-name" autocomplete="off"', placeholder: "Начни вводить логин" })}<div id="prep-suggestions" class="search-results" hidden></div><aside id="opponent-card" hidden></aside>${input("Уровень соперника", "opponent_level", "", { required: true, max: 100, placeholder: "Равный, сильнее, клубный 4.0…" })}${input("Стиль соперника · свободно", "opponent_style")}<div class="field-row">${select(
-        "Событие",
-        "session_type",
-        [
-          ["friendly", "Товарищеский"],
-          ["tournament", "Турнир"],
-          ["practice", "Тренировка"],
-        ],
-      )}${select("Длительность", "session_duration", [
-        ["unlimited", "Без лимита"],
-        ["1h", "1 час"],
-        ["1_5h", "1,5 часа"],
-        ["2h", "2 часа"],
-      ])}</div>${input("Погода", "weather")}</fieldset><fieldset><legend>Состояние</legend>${rating("Энергия", "energy_level", "выжат", "полон сил")}${input("Когда и что ел", "last_meal")}${textarea("Тело · обязательно", "physical_state", "Как спина, колени, ноги, дыхание?", true, 300)}${textarea("Настрой · обязательно", "mindset", "Спокоен, зажат, мотивирован…", true, 300)}</fieldset>${formError()}<button class="primary-button" type="submit">${edit ? "Обновить план" : "Получить план"}</button>${edit ? button("Вернуться к сохранённому плану", "plan", "text-button") : ""}</form>`,
+        ])}${select("Покрытие", "surface", Object.entries(SURFACES))}</div>${input("Логин соперника · необязательно", "opponent_name", "", { max: 100, extra: 'id="prep-opponent-name" autocomplete="off"', placeholder: "Начни вводить логин" })}<div id="prep-suggestions" class="search-results" hidden></div><aside id="opponent-card" hidden></aside>${input("Уровень соперника", "opponent_level", "", { required: true, max: 100, placeholder: "Равный, сильнее, клубный 4.0…" })}${input("Стиль соперника · свободно", "opponent_style")}<div class="field-row">${select(
+          "Событие",
+          "session_type",
+          [
+            ["friendly", "Товарищеский"],
+            ["tournament", "Турнир"],
+            ["practice", "Тренировка"],
+          ],
+        )}${select("Длительность", "session_duration", [
+          ["unlimited", "Без лимита"],
+          ["1h", "1 час"],
+          ["1_5h", "1,5 часа"],
+          ["2h", "2 часа"],
+        ])}</div>${input("Погода", "weather")}`,
+      )}${formSection("Состояние", `${rating("Энергия", "energy_level", "выжат", "полон сил")}${input("Когда и что ел", "last_meal")}${textarea("Тело · обязательно", "physical_state", "Как спина, колени, ноги, дыхание?", true, 300)}${textarea("Настрой · обязательно", "mindset", "Спокоен, зажат, мотивирован…", true, 300)}`)}${formError()}<button class="primary-button" type="submit">${edit ? "Обновить план" : "Получить план"}</button>${edit ? button("Вернуться к сохранённому плану", "plan", "text-button") : ""}</form>`,
     edit ? "plan" : null,
   );
   const form = $("#prep-form");
@@ -651,18 +664,21 @@ function renderReview(matchId) {
       "Что забираем с собой?",
       "Заполни то, что есть сказать. Достаточно одного наблюдения словами.",
     ) +
-      `<form id="review-form" class="stack-form"><fieldset><legend>Моя игра</legend>${rating("Физическое состояние", "physical_rating", "тяжело", "отлично")}${textarea("Мои ошибки", "own_errors", "Где ошибался и почему?")}</fieldset><fieldset><legend>Моё состояние</legend>${rating("Психологическое состояние", "mental_rating", "не справлялся", "устойчиво")}${textarea("Эмоции и концентрация", "emotional_state", "Что происходило после ошибок?")}</fieldset><fieldset><legend>Соперник</legend><p class="muted">Стиль · можно несколько</p>${choices(
-        "opponent_styles",
-        OPPONENT_STYLE_CHIPS.map((t) => [t, t]),
-        "style-grid",
-        true,
-      )}${textarea("Уточнение стиля", "opponent_style_note", "Например: слева режет, справа атакует")}${textarea("Что против него работало", "opponent_what_worked", "Например: глубоко под бэкхэнд")}${textarea("На чём он ошибался", "opponent_errors", "Например: не успевал к высокому мячу")}</fieldset><fieldset><legend>Польза</legend><p>Приложение помогло тебе в этом матче?</p>${choices(
-        "app_helpful",
-        [
+      `<form id="review-form" class="stack-form">${formSection("Моя игра", `${rating("Физическое состояние", "physical_rating", "тяжело", "отлично")}${textarea("Мои ошибки", "own_errors", "Где ошибался и почему?")}`)}${formSection("Моё состояние", `${rating("Психологическое состояние", "mental_rating", "не справлялся", "устойчиво")}${textarea("Эмоции и концентрация", "emotional_state", "Что происходило после ошибок?")}`)}${formSection(
+        "Соперник",
+        `<p class="muted">Стиль · можно несколько</p>${choices(
+          "opponent_styles",
+          OPPONENT_STYLE_CHIPS.map((t) => [t, t]),
+          "style-grid",
+          true,
+        )}${textarea("Уточнение стиля", "opponent_style_note", "Например: слева режет, справа атакует")}${textarea("Что против него работало", "opponent_what_worked", "Например: глубоко под бэкхэнд")}${textarea("На чём он ошибался", "opponent_errors", "Например: не успевал к высокому мячу")}`,
+      )}${formSection(
+        "Польза",
+        `<p>Приложение помогло тебе в этом матче?</p>${choices("app_helpful", [
           ["true", "Да"],
           ["false", "Нет"],
-        ],
-      )}</fieldset>${formError()}<button class="primary-button" type="submit">Получить разбор</button></form>`,
+        ])}`,
+      )}${formError()}<button class="primary-button" type="submit">Получить разбор</button></form>`,
     "details",
   );
   useDraft($("#review-form"), "review", matchId);
@@ -671,6 +687,15 @@ function historyQuery() {
   return state.history.month
     ? `month=${encodeURIComponent(state.history.month)}&`
     : "";
+}
+function formatMonth(value) {
+  if (!value) return "Все матчи";
+  const [year, month] = value.split("-").map(Number);
+  const label = new Intl.DateTimeFormat("ru-RU", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 function matchRow(m) {
   const status =
@@ -697,10 +722,11 @@ function scoreOutcome(score) {
   return n > 0 ? "win" : n < 0 ? "loss" : null;
 }
 function renderHistory() {
+  const monthMode = Boolean(state.history.month);
   mount(
     "history",
     hero("Журнал") +
-      `<div class="card"><label>Найти соперника<input id="history-search" autocomplete="off" placeholder="Логин или старое имя"></label><div id="history-suggestions" class="search-results" hidden></div></div><div class="field-row"><label>Месяц<input type="month" id="history-month" value="${h(state.history.month || localMonth())}"></label>${button("За всё время", "all-time", "secondary-button")}</div><p class="muted" id="history-period">${state.history.month ? h(state.history.month) : "За всё время"}</p><div id="history-stats"></div><div id="matches-list" class="match-list"></div><p id="history-error" class="error-message" role="alert" hidden></p><div class="row">${button("Обновить", "refresh-history", "secondary-button")}${button("Ещё матчи", "more-history", "secondary-button", 'id="more-history" hidden')}</div>`,
+      `<div class="card"><label>Найти соперника<input id="history-search" autocomplete="off" placeholder="Логин или старое имя"></label><div id="history-suggestions" class="search-results" hidden></div></div><div class="period-switch" role="group" aria-label="Период журнала"><button type="button" data-action="history-period-month" aria-pressed="${monthMode}">Месяц</button><button type="button" data-action="all-time" aria-pressed="${!monthMode}">Всё время</button></div>${monthMode ? `<label class="month-picker"><span>Выбрать месяц</span><span class="month-picker-face">${h(formatMonth(state.history.month))}<i aria-hidden="true"></i></span><input type="month" id="history-month" value="${h(state.history.month)}" aria-label="Выбрать месяц"></label>` : ""}<p class="eyebrow history-period-label" id="history-period">${h(formatMonth(state.history.month))}</p><div id="history-stats"></div><div id="matches-list" class="match-list"></div><p id="history-error" class="error-message" role="alert" hidden></p><div class="row">${button("Обновить", "refresh-history", "secondary-button")}${button("Ещё матчи", "more-history", "secondary-button", 'id="more-history" hidden')}</div>`,
   );
   $("#history-search").value = state.history.search || "";
   if (state.history.loaded) {
@@ -717,7 +743,7 @@ function paintHistory() {
   const s = state.history.stats;
   if (s)
     $("#history-stats").innerHTML =
-      `<div class="stats-grid"><div class="card"><p class="eyebrow">Завершено</p><p class="stat-number">${s.completed}</p></div><div class="card"><p class="eyebrow">Победы — поражения</p><p class="stat-number">${s.wins}–${s.losses}</p>${s.unknown ? `<p class="muted">${s.unknown} без исхода</p>` : ""}</div></div><div class="card"><p>Приложение помогло</p><strong>${s.helpful_total ? `${s.helpful_yes} из ${s.helpful_total} · ${s.helpful_percent}%` : "Пока нет ответов"}</strong></div>`;
+      `<div class="history-summary"><div class="stats-grid"><div class="card"><p class="eyebrow">Завершено</p><p class="stat-number">${s.completed}</p></div><div class="card"><p class="eyebrow">Победы — поражения</p><p class="stat-number">${s.wins}–${s.losses}</p>${s.unknown ? `<p class="muted">${s.unknown} без исхода</p>` : ""}</div></div><div class="card helpful-card"><p>Приложение помогло</p><strong>${s.helpful_total ? `${s.helpful_yes} из ${s.helpful_total} · ${s.helpful_percent}%` : "Пока нет ответов"}</strong></div></div>`;
 }
 async function loadHistory(more = false) {
   const month = state.history.month,
@@ -941,7 +967,7 @@ async function renderProfile() {
   mount(
     "profile",
     hero("Мой профиль", "Постоянный контекст для новых планов.") +
-      `<form id="profile-form" class="stack-form"><fieldset><legend>Моя игра</legend>${input("Уровень", "level", "", { max: 100 })}${input("Опыт", "experience")}${textarea("Стиль игры", "playing_style")}${textarea("Сильные стороны", "strengths")}</fieldset><fieldset><legend>Психологический паттерн</legend>${textarea("Типичная реакция под давлением", "mental_pattern")}<p class="form-note">Устойчивая особенность, а не сегодняшнее настроение.</p></fieldset><fieldset><legend>Здоровье и ограничения</legend>${textarea("Постоянный медицинский контекст", "medical_context", "", false, 1000)}<p class="form-note">Используется только для безопасной дозировки нагрузки.</p></fieldset>${formError()}<button type="submit" class="primary-button">Сохранить профиль</button><p id="profile-status" role="status"></p></form>`,
+      `<form id="profile-form" class="stack-form">${formSection("Моя игра", `${input("Уровень", "level", "", { max: 100 })}${textarea("Опыт", "experience", "Например: два года, тренировки дважды в неделю", false, 200, 'class="auto-grow"')}${textarea("Стиль игры", "playing_style", "", false, 500, 'class="auto-grow"')}${textarea("Сильные стороны", "strengths", "", false, 500, 'class="auto-grow"')}`)}${formSection("Психологический паттерн", `${textarea("Типичная реакция под давлением", "mental_pattern", "", false, 500, 'class="auto-grow"')}<p class="form-note">Устойчивая особенность, а не сегодняшнее настроение.</p>`)}${formSection("Здоровье и ограничения", `${textarea("Постоянный медицинский контекст", "medical_context", "", false, 1000, 'class="auto-grow"')}<p class="form-note">Используется только для безопасной дозировки нагрузки.</p>`)}${formError()}<button type="submit" class="primary-button">Сохранить профиль</button><p id="profile-status" role="status"></p></form>`,
   );
   const form = $("#profile-form");
   [...form.elements].forEach((field) => (field.disabled = true));
@@ -949,6 +975,7 @@ async function renderProfile() {
     const res = await apiFetch("/api/profile");
     if (!form.isConnected) return;
     restoreForm(form, res.profile || {});
+    form.querySelectorAll("textarea.auto-grow").forEach(growTextarea);
     [...form.elements].forEach((field) => (field.disabled = false));
   } catch (e) {
     if (form.isConnected) errorIn(form, e);
@@ -958,7 +985,7 @@ function renderSettings() {
   mount(
     "settings",
     hero("Подключение", "Ключ хранится только на этом устройстве.") +
-      `<form id="settings-form" class="stack-form"><fieldset><legend>Это устройство</legend>${input("Адрес API", "url", apiUrl(), { type: "url", required: true, max: 500 })}${input("Личный API-ключ", "key", apiKey(), { type: "password", required: true, max: 500, extra: 'autocomplete="current-password"' })}<p id="settings-status" class="muted" role="status">Подключение не проверено</p></fieldset>${formError()}<button type="submit" class="primary-button">Сохранить и проверить</button></form><div class="card switch-row"><div><strong>Ночная тема</strong><p class="muted">Для матчей при искусственном свете</p></div><button type="button" class="switch" data-action="theme" role="switch" aria-label="Ночная тема" aria-checked="${document.documentElement.dataset.theme === "dark"}"></button></div><p class="card muted">Если для подключения нужен VPN, включи его перед заполнением анкеты.</p>`,
+      `<form id="settings-form" class="stack-form">${formSection("Это устройство", `${input("Адрес API", "url", apiUrl(), { type: "url", required: true, max: 500 })}${input("Личный API-ключ", "key", apiKey(), { type: "password", required: true, max: 500, extra: 'autocomplete="current-password"' })}<p id="settings-status" class="muted" role="status">Подключение не проверено</p>`)}${formError()}<button type="submit" class="primary-button">Сохранить и проверить</button></form><div class="card switch-row"><div><strong>Ночная тема</strong><p class="muted">Для матчей при искусственном свете</p></div><button type="button" class="switch" data-action="theme" role="switch" aria-label="Ночная тема" aria-checked="${document.documentElement.dataset.theme === "dark"}"></button></div><p class="card muted">Если для подключения нужен VPN, включи его перед заполнением анкеты.</p>`,
   );
 }
 function applyTheme(theme) {
@@ -1310,6 +1337,12 @@ async function handleAction(action, el) {
     el.setAttribute("aria-checked", String(theme === "dark"));
     return;
   }
+  if (action === "history-period-month") {
+    state.history.month = state.history.month || localMonth();
+    state.history.loaded = false;
+    renderHistory();
+    return;
+  }
   if (action === "all-time") {
     state.history.month = "";
     state.history.loaded = false;
@@ -1357,6 +1390,8 @@ document.addEventListener("submit", (event) => {
 });
 document.addEventListener("input", (event) => {
   saveDraft(event.target.closest("form"));
+  if (event.target.matches("#profile-form textarea.auto-grow"))
+    growTextarea(event.target);
   if (event.target.id === "prep-opponent-name")
     scheduleSearch(event.target.value, "prep");
   if (event.target.id === "history-search") {

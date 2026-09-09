@@ -17,7 +17,7 @@ function app() {
   w.localStorage.setItem("tennisCoachApiKey", "test");
   w.eval(
     fs.readFileSync("docs/app.js", "utf8").replace(/boot\(\);\s*$/, "") +
-      "\nwindow.testApp={state,renderPrep,renderReview,renderObservation,renderFinish,renderMatch,renderDetails,formValues,saveDraft,draftKey,readDraft,performOperation,reconcileDrafts,scoreOutcome,handleAction};",
+      "\nwindow.testApp={state,renderPrep,renderReview,renderObservation,renderFinish,renderMatch,renderDetails,renderHistory,renderProfile,formValues,saveDraft,draftKey,readDraft,performOperation,reconcileDrafts,scoreOutcome,handleAction};",
   );
   return { dom, w, a: w.testApp };
 }
@@ -301,6 +301,101 @@ test("maximum advice and legacy plan text remain available in full", () => {
       w.document
         .querySelector("#screen-match")
         .textContent.includes("Старый настрой"),
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("form section titles sit inside rounded cards instead of cutting their borders", () => {
+  const { dom, w, a } = app();
+  try {
+    a.renderPrep();
+    assert.equal(w.document.querySelectorAll("#prep-form fieldset").length, 0);
+    assert.equal(
+      w.document.querySelectorAll("#prep-form .form-section").length,
+      2,
+    );
+    assert.deepEqual(
+      [...w.document.querySelectorAll("#prep-form .form-section-title")].map(
+        (node) => node.textContent,
+      ),
+      ["Матч", "Состояние"],
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("journal period is an explicit compact switch with a separate month picker", () => {
+  const { dom, w, a } = app();
+  try {
+    a.state.history.loaded = true;
+    a.state.history.items = [];
+    a.state.history.next = null;
+    a.state.history.stats = {
+      completed: 13,
+      wins: 8,
+      losses: 5,
+      unknown: 0,
+      helpful_total: 0,
+    };
+    a.renderHistory();
+    assert.equal(
+      w.document.querySelectorAll(".period-switch button").length,
+      2,
+    );
+    assert.equal(
+      w.document.querySelector(".period-switch [aria-pressed=true]")
+        .textContent,
+      "Месяц",
+    );
+    assert.match(
+      w.document.querySelector(".month-picker").textContent,
+      /Выбрать месяц/i,
+    );
+    assert.equal(
+      w.document.querySelector(".history-summary").children.length,
+      2,
+    );
+    a.state.history.month = "";
+    a.state.history.loaded = true;
+    a.renderHistory();
+    assert.equal(w.document.querySelector(".month-picker"), null);
+    assert.equal(
+      w.document.querySelector(".period-switch [aria-pressed=true]")
+        .textContent,
+      "Всё время",
+    );
+  } finally {
+    dom.window.close();
+  }
+});
+
+test("profile uses growing multiline fields for descriptive answers", async () => {
+  const { dom, w, a } = app();
+  try {
+    w.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        profile: {
+          experience: "Длинное описание опыта",
+          playing_style: "Длинное описание стиля",
+        },
+      }),
+    });
+    await a.renderProfile();
+    assert.equal(
+      w.document.querySelector("[name=experience]").tagName,
+      "TEXTAREA",
+    );
+    assert.equal(
+      w.document.querySelectorAll("#profile-form fieldset").length,
+      0,
+    );
+    assert.equal(
+      w.document.querySelectorAll("#profile-form textarea.auto-grow").length,
+      5,
     );
   } finally {
     dom.window.close();
