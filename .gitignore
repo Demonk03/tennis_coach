@@ -9,3 +9,11 @@ htmlcov/
 tennis-report-*.html
 node_modules/
 .backups/
+
+# Private project notes and real-user research/data
+CLAUDE.md
+docs/custdev-*.md
+docs/plan.md
+screenshots/
+export_log.py
+design_handoff_tennis_*/
